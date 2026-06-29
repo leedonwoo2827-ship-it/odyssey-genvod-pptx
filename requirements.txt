@@ -1,0 +1,67 @@
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+httpx
+pydantic>=2.0
+pydantic-settings>=2.0
+SQLAlchemy
+pypdf
+beautifulsoup4
+charset-normalizer
+numpy
+# Vector store + local embeddings for RAG, semantic memory, and tool
+# selection. Used on core agent paths, so installed by default — the app
+# still degrades to keyword fallback if they're ever missing.
+# chromadb-client is the lightweight HTTP client (talks to a standalone
+# ChromaDB service); fastembed runs local ONNX embeddings.
+chromadb-client
+fastembed
+youtube-transcript-api
+# Markdown rendering for research reports (src/visual_report.py).
+# Imported at module-top so it's a hard core dep, not optional.
+markdown
+# Calendar .ics import/export (routes/calendar_routes.py).
+icalendar
+# Recurrence rule expansion for calendar events (routes/calendar_routes.py).
+# Imported directly as dateutil.rrule — make it explicit even though caldav
+# pulls it in transitively.
+python-dateutil
+# CalDAV sync (src/caldav_sync.py). Handles PROPFIND discovery + REPORT
+# fetch across Radicale, Nextcloud, Apple, Fastmail; we'd be reinventing
+# the protocol without it.
+caldav
+cryptography
+bcrypt
+mcp
+pyotp
+qrcode[pil]
+croniter
+pytest
+pytest-asyncio
+# --- 영상공방 (VOD Studio) additions ---
+# 회사 양식 PPTX 생성 (services/studio/generators/pptx_gen.py). 문서공방에서 이식.
+python-pptx
+# NotebookLM automation CLI (`nlm` + `notebooklm-mcp`). Drives slide-deck +
+# script generation. See services/notebooklm_service.py.
+# 주의: 이 패키지가 niquests→urllib3-future 를 끌어와 표준 urllib3 를 가린다.
+# 그러면 fastembed/requests 가 깨지므로 setup.bat 가 설치 후 urllib3 를 복구한다.
+notebooklm-mcp-cli
+# PDF -> per-slide PNG rendering + text extraction for the review step.
+# services/vodstudio/pdf_tools.py.
+PyMuPDF
+# mp4maker render dependency (subtitle parsing). mp4maker itself lives in the
+# ./mp4maker/ checkout and is invoked as `python -m mp4maker`. ffmpeg/ffprobe
+# must be on PATH. See services/vodstudio/mp4_render.py.
+pysrt
+# --- 로컬 CPU TTS (VoiceWright / Supertonic-3, ONNX) ---
+# voicewright/ 패키지가 ONNX 모델로 음성을 합성한다(클라우드 없음). engine.py 참고.
+onnxruntime>=1.17
+soundfile>=0.12.1
+PyYAML>=6.0
+# --- LLM 공급자: Antigravity CLI(agy) Google 토큰을 Windows 자격증명 관리자에서 읽기 위함 ---
+# (Windows 전용. 다른 OS에서는 설치 생략 가능 — agy 사용 시에만 필요.)
+pywin32; sys_platform == "win32"
+# agy 는 응답을 stdout 파이프가 아니라 콘솔에 직접 쓴다. PTY(가상 콘솔)로 캡처하려면 필요.
+# 없으면 "agy 호출 실패(exit=0)" 로 빈 응답이 잡힌다. (services/agy/pty_terminal.py)
+pywinpty; sys_platform == "win32"

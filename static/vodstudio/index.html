@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>영상공방 — VOD Studio</title>
+<style>
+  /* 본문 글꼴: Pretendard (가변 · 로컬 번들 · OFL 1.1). 한글+라틴 모두 커버. */
+  @font-face {
+    font-family:'Pretendard Variable'; font-weight:45 920; font-style:normal; font-display:swap;
+    src:url('/static/vodstudio/fonts/PretendardVariable.woff2') format('woff2-variations');
+  }
+  /* Figma 라이트 디자인 (_context/figma-design.md): 흰 캔버스 · 검정 잉크 ·
+     흑/백 pill CTA · 파스텔 컬러블록 섹션 · 그림자 대신 hairline 테두리.
+     선택/활성 = 검정(primary) 채움. 색은 위계 도구가 아니라 weight 가 위계를 만든다. */
+  :root {
+    --bg:#ffffff; --panel:#ffffff; --panel2:#f5f5f3; --fg:#121212; --muted:#6b6b6b;
+    --border:#e6e5e2; --accent:#121212;
+    --primary:#121212; --on-primary:#ffffff;        /* 검정 pill CTA */
+    --magenta:#e0218a;                              /* 단발 프로모 액센트(거의 안 씀) */
+    /* 시맨틱 상태색 — 인증/완료=그린 · 대기/주의=골드 · 반려/오류=적색 */
+    --ok:#16a34a; --pending:#c79a13; --reject:#dc2626;
+    --accent2:var(--ok); --warn:var(--pending); --err:var(--reject);
+    --navy:#1a1b3a; --navy2:#3b3d80;                /* 아이콘 박스 네이비 그라데이션 */
+    --radius:16px; --radius-pill:50px;
+    /* 파스텔 컬러블록 (섹션 배경 · 한 화면에 하나만) */
+    --block-lime:#e8f59a; --block-lilac:#e7defb; --block-cream:#faf3e3; --block-mint:#d9f5e6;
+    --block-pink:#fbe3ef; --block-coral:#ffe0d2; --block-navy:#1a1b3a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:'Pretendard Variable','Pretendard',-apple-system,'Segoe UI','Malgun Gothic',sans-serif; line-height:1.5; letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  a { color:var(--accent); }
+  header { display:flex; align-items:center; gap:.8rem; padding:1rem 1.5rem; border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(255,255,255,.85); backdrop-filter:blur(10px); z-index:5; }
+  header h1 { font-size:1.2rem; margin:0; font-weight:700; letter-spacing:-.03em; }
+  .badge { font-size:.78rem; padding:.2rem .6rem; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
+  .badge.ok { color:var(--ok); border-color:var(--ok); }
+  .badge.no { color:var(--reject); border-color:var(--reject); }
+  .badge.pending { color:var(--pending); border-color:var(--pending); }
+  /* 시맨틱 상태 점 */
+  .sdot { display:inline-block; width:.5rem; height:.5rem; border-radius:50%; margin-right:.35rem; vertical-align:middle; }
+  .sdot.ok { background:var(--ok); } .sdot.pending { background:var(--pending); } .sdot.reject { background:var(--reject); }
+  main { max-width:1180px; margin:0 auto; padding:2rem 1.75rem 3rem; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem 1.6rem; margin-bottom:1.5rem; }
+  .card h3 { font-size:1.08rem; font-weight:700; margin:0 0 1rem; display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; letter-spacing:-.02em; }
+  label { display:block; font-size:.82rem; color:var(--muted); margin:.85rem 0 .3rem; }
+  input, select, textarea { width:100%; background:var(--panel); color:var(--fg); border:1px solid var(--border); border-radius:8px; padding:.5rem .65rem; font-size:.9rem; font-family:inherit; transition:border-color .15s, box-shadow .15s; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 1px rgba(18,18,18,.4); }
+  textarea { resize:vertical; min-height:64px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+  .row3 { display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; }
+  /* CTA = pill. 기본=검정 pill(흰 글자), 보조=흰 pill(검정 글자·hairline). Figma 규약. */
+  button { background:var(--primary); color:var(--on-primary); border:none; border-radius:var(--radius-pill); padding:.6rem 1.1rem; font-size:.9rem; font-weight:600; cursor:pointer; transition:transform .1s, background .15s, box-shadow .15s; }
+  button:hover { transform:scale(1.02); }
+  button:active { transform:scale(.98); }
+  button.secondary { background:var(--panel); border:1px solid var(--border); color:var(--fg); }
+  button.secondary:hover { background:#ececea; }
+  button.small { padding:.35rem .8rem; font-size:.8rem; font-weight:500; }
+  /* 들어보기 등 미디어 액션 — 컬러 채운 pill로 옵션 칩과 구분 */
+  button.btn-listen { background:linear-gradient(135deg,#0d9488,#2dd4bf); color:#fff; border:none; }
+  button.btn-listen:hover { filter:brightness(1.06); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button:focus-visible, .vpill:focus-visible { outline:none; box-shadow:0 0 0 2px rgba(18,18,18,.45); }
+  .hint { font-size:.8rem; color:var(--muted); }
+  .bar { height:8px; background:var(--panel2); border-radius:999px; overflow:hidden; margin:.5rem 0; }
+  .bar > div { height:100%; background:var(--accent2); width:0%; transition:width .3s; }
+  .logs { font-family:ui-monospace,Consolas,monospace; font-size:.78rem; color:#444; background:#f7f7f5; border:1px solid var(--border); border-radius:8px; padding:.6rem; max-height:200px; overflow:auto; white-space:pre-wrap; }
+  .warn { color:var(--warn); font-size:.85rem; }
+  .err { color:var(--err); }
+  .hidden { display:none; }
+  .toolbar { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  .pill { font-size:.78rem; color:var(--muted); }
+  .pill.ok { color:var(--accent2); border:1px solid var(--accent2); border-radius:999px; padding:.05rem .45rem; }
+  code { background:var(--panel2); color:#9333a8; padding:.1rem .35rem; border-radius:4px; font-size:.85em; }
+  .iconbtn { width:34px; height:34px; padding:0; border-radius:8px; background:var(--panel2); border:1px solid var(--border); color:var(--fg); font-size:1.05rem; cursor:pointer; }
+  .iconbtn:hover { background:var(--border); }
+  .settings-panel { position:fixed; top:60px; right:1.2rem; width:380px; max-width:92vw; z-index:20;
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.1rem;
+    box-shadow:0 12px 40px rgba(16,24,40,.18); }
+  .settings-panel h3 { margin:0 0 .8rem; font-size:.95rem; }
+  .set-row { display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; padding:.7rem 0; border-top:1px solid var(--border); }
+  .set-row:first-of-type { border-top:none; }
+  .filebox { display:flex; align-items:center; justify-content:center; gap:.5rem; width:100%;
+    min-height:84px; padding:1rem; border:2px dashed var(--border); border-radius:10px;
+    background:var(--panel2); color:var(--muted); cursor:pointer; text-align:center; transition:all .15s; }
+  .filebox:hover, .filebox.drag { border-color:var(--accent); color:var(--fg); background:rgba(18,18,18,.05); }
+  .filebox.has-file { border-style:solid; border-color:var(--accent2); color:var(--accent2); }
+  .logo-ic { font-size:1.3rem; }
+  /* 아이콘 체계: 네이비 그라데이션 박스 + 단색 라인 아이콘(이모지 대체) */
+  .icon-box { display:inline-flex; align-items:center; justify-content:center; width:1.65rem; height:1.65rem; border-radius:7px; background:linear-gradient(135deg,var(--navy),var(--navy2)); color:#fff; flex:none; }
+  /* 아이콘 박스 색상 변형 — 섹션별 컬러 리듬(옵션 칩은 흑백 유지) */
+  .icon-box.ib-violet { background:linear-gradient(135deg,#6d28d9,#a855f7); }
+  .icon-box.ib-teal   { background:linear-gradient(135deg,#0d9488,#2dd4bf); }
+  .icon-box.ib-amber  { background:linear-gradient(135deg,#d97706,#f59e0b); }
+  .icon-box.ib-coral  { background:linear-gradient(135deg,#e11d48,#fb7185); }
+  .icon-box.ib-green  { background:linear-gradient(135deg,#15803d,#22c55e); }
+  .icon-box.ib-indigo { background:linear-gradient(135deg,#3730a3,#6366f1); }
+  .icon-box.lg { width:2.1rem; height:2.1rem; border-radius:9px; }
+  .ic { width:1.05rem; height:1.05rem; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .icon-box.lg .ic { width:1.25rem; height:1.25rem; }
+  .ic-inline { width:1rem; height:1rem; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; vertical-align:-.15em; }
+  /* mediaforge식 진행 스테퍼(녹색 점) */
+  .stepper { display:flex; align-items:center; gap:.4rem; margin-left:1rem; font-size:.85rem; }
+  .stepper .step { color:var(--muted); padding:.25rem .6rem; border-radius:999px; border:1px solid transparent; background:transparent; font:inherit; cursor:pointer; display:flex; align-items:center; gap:.35rem; }
+  .stepper .step::before { content:"●"; color:var(--border); font-size:.7rem; }
+  .stepper .step:hover { color:var(--fg); }
+  .stepper .step.active { color:var(--on-primary); background:var(--primary); font-weight:600; }
+  .stepper .step.active::before { color:var(--on-primary); }
+  .stepper .step.done::before { color:var(--accent2); }
+  .stepper .sep { color:var(--border); }
+  @media (max-width:720px){ .stepper{display:none;} }
+  /* 공급자 토글 */
+  .provtoggle { display:inline-flex; border:1px solid var(--border); border-radius:999px; overflow:hidden; }
+  .provtoggle button { background:var(--panel2); color:var(--muted); border:none; border-radius:0; padding:.35rem .9rem; font-size:.82rem; font-weight:600; }
+  .provtoggle button.active { background:var(--accent); color:#fff; }
+  /* 파일 칩 */
+  .chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.5rem; }
+  .chip { background:var(--panel2); border:1px solid var(--border); border-radius:999px; padding:.2rem .6rem; font-size:.78rem; color:var(--fg); }
+  /* 이미지 그리드(씬N OK 배지) */
+  .thumbs { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.8rem; }
+  .thumb { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:.4rem; }
+  .thumb img { width:100%; border-radius:6px; border:1px solid var(--border); background:#eef0f3; display:block; aspect-ratio:16/9; object-fit:cover; }
+  .thumb .cap { display:flex; justify-content:space-between; align-items:center; margin-top:.35rem; font-size:.78rem; color:var(--muted); }
+  .thumb .miss { display:flex; align-items:center; justify-content:center; aspect-ratio:16/9; color:var(--err); font-size:.82rem; border:1px dashed var(--err); border-radius:6px; }
+  /* 씬별 음성/자막 카드 */
+  .scard { background:var(--panel2); border:1px solid var(--border); border-radius:var(--radius); padding:.9rem 1rem; margin-bottom:.9rem; }
+  .scard-head { font-weight:600; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.5rem; }
+  .scard-head .dur { color:var(--muted); font-weight:400; font-size:.82rem; }
+  .twocol { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; }
+  @media (max-width:720px){ .twocol{grid-template-columns:1fr;} .row,.row3{grid-template-columns:1fr;} }
+  .scard audio { width:100%; margin-top:.6rem; }
+  .cuepv { background:#000; border:1px solid var(--border); border-radius:8px; min-height:58px; margin-top:.5rem; padding:.75rem 1rem; text-align:center; color:#fff; font-size:1.25rem; font-weight:600; line-height:1.4; display:flex; align-items:center; justify-content:center; }
+  .cuepv-text { color:#fff; }
+  .cuehead { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-top:.7rem; }
+  .cuehead b { margin-right:auto; }
+  .cuerow { display:grid; grid-template-columns:90px 90px 1fr 32px; gap:.4rem; margin-top:.35rem; align-items:center; }
+  .cuerow input { padding:.35rem .5rem; font-size:.82rem; }
+  .cuerow .del { background:var(--panel); border:1px solid var(--border); color:var(--err); border-radius:6px; padding:.3rem 0; }
+  /* 성우 단추(pill) 선택 — 음성강의 메이커식 · 10개 한 줄 */
+  .pillgroup { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.3rem; }
+  /* 라벨 인라인(왼쪽) + 칩 우측 — 목소리/타겟/목적을 컴팩트 한 줄 형태로 */
+  .field-row { display:flex; align-items:flex-start; gap:.7rem; margin-top:.7rem; }
+  .field-row > label { margin:.32rem 0 0; flex:0 0 72px; }
+  .field-row > .pillgroup { flex:1; margin-top:0; min-width:0; }
+  /* 목소리 줄: 칩 + '들어보기'를 한 흐름으로 (들어보기가 마지막 칩 옆에 옴) */
+  .field-row > .vrow-pills { flex:1; display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; min-width:0; }
+  @media (max-width:640px){ .field-row{ flex-direction:column; gap:.2rem; } .field-row > label{ flex:none; } }
+  .vpill { background:var(--panel); border:1px solid var(--border); color:var(--fg); border-radius:999px;
+    padding:.38rem .6rem; font-size:.78rem; font-weight:500; white-space:nowrap; cursor:pointer; transition:all .12s; }
+  .vpill:hover { border-color:var(--accent); }
+  .vpill.active { background:var(--primary); border-color:var(--primary); color:var(--on-primary); font-weight:600; }
+  /* 번들 불러오기 리스트 */
+  .bundlelist { display:flex; flex-direction:column; gap:.4rem; margin-top:.5rem; max-height:280px; overflow:auto; }
+  .brow { display:flex; align-items:center; gap:.6rem; padding:.55rem .7rem; border:1px solid var(--border); border-radius:8px; background:var(--panel2); }
+  .brow .bname { flex:1; min-width:0; font-size:.86rem; }
+  .brow .bname b { font-weight:600; }
+  .brow .bmeta { color:var(--muted); font-size:.78rem; }
+  .brow .bdel { background:var(--panel); border:1px solid var(--border); color:var(--err); border-radius:7px; padding:.35rem .55rem; font-size:.85rem; }
+  .brow .bdel:hover { background:rgba(220,38,38,.08); border-color:var(--err); }
+  .bundlelist .empty { color:var(--muted); font-size:.85rem; padding:.4rem .2rem; }
+  /* ② PPTX·비주얼원고 */
+  /* Figma 시그니처: 파스텔 컬러블록 섹션 (그림자 없음 · 한 화면에 하나) */
+  .card.block { border:none; border-radius:var(--radius); padding:1.4rem 1.5rem; }
+  .card.block-lime { background:var(--block-lime); }
+  .card.block-lilac { background:var(--block-lilac); }
+  .card.block-cream { background:var(--block-cream); }
+  /* 인앱 분할 히어로 (네이비 컬러블록) + 실데이터 프리뷰(인라인 SVG 차트) */
+  .hero { background:linear-gradient(135deg,var(--navy),#2a2c63); color:#fff; border:none; border-radius:var(--radius);
+    padding:2rem 2.2rem; margin-bottom:1.5rem; display:grid; grid-template-columns:1.05fr .95fr; gap:1.6rem; align-items:center; }
+  .hero .eyebrow { font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-bottom:.55rem; }
+  .hero h2 { font-size:1.95rem; line-height:1.12; letter-spacing:-.035em; margin:0 0 .55rem; font-weight:700; }
+  .hero p { color:rgba(255,255,255,.78); margin:0 0 1.1rem; font-size:.95rem; line-height:1.5; }
+  .hero .cta { background:#fff; color:var(--navy); }
+  .hero-preview { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:1.1rem 1.2rem; }
+  .hero-preview .eyebrow { margin-bottom:.7rem; }
+  .pv-row { display:flex; align-items:center; gap:1.2rem; }
+  .hero-stat .n { font-size:1.5rem; font-weight:700; }
+  .hero-stat .l { font-size:.72rem; color:rgba(255,255,255,.6); margin-left:.2rem; }
+  .stepbar { display:flex; gap:.4rem; margin-top:1.1rem; }
+  .stepbar .s { flex:1; height:6px; border-radius:3px; background:rgba(255,255,255,.18); transition:background .25s; }
+  .stepbar .s.done { background:var(--ok); }
+  .stepbar-labels { display:flex; gap:.4rem; margin-top:.35rem; }
+  .stepbar-labels span { flex:1; text-align:center; font-size:.62rem; color:rgba(255,255,255,.5); }
+  @media (max-width:760px){ .hero{ grid-template-columns:1fr; } }
+  .deck-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media (max-width:900px){ .deck-grid{ grid-template-columns:1fr; } }
+  .visual-list { display:flex; flex-direction:column; gap:.6rem; max-height:60vh; overflow:auto; }
+  .visual-item { border:1px solid var(--border); border-radius:8px; background:var(--panel2); padding:.5rem .6rem; }
+  .visual-item .vi-head { display:flex; align-items:center; gap:.5rem; font-size:.9rem; flex-wrap:wrap; }
+  .visual-item .vi-head .vi-copy { margin-left:auto; }
+  .visual-item .vi-prompt { margin:.4rem 0 0; white-space:pre-wrap; word-break:break-word; font:inherit; font-size:.8rem; color:var(--muted); background:transparent; border:0; padding:0; }
+  .radio { font-size:.85rem; display:inline-flex; align-items:center; gap:.25rem; cursor:pointer; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7.5" y1="4" x2="7.5" y2="20"/><line x1="16.5" y1="4" x2="16.5" y2="20"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="8" r="1"/><circle cx="16" cy="10" r="1"/><circle cx="14" cy="15" r="1"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5L5 20"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><line x1="10" y1="21" x2="10" y2="17"/><line x1="14" y1="21" x2="14" y2="17"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/></symbol>
+  <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M9 4a2 2 0 1 1 4 0h3a1 1 0 0 1 1 1v3a2 2 0 1 1 0 4v3a1 1 0 0 1-1 1h-3a2 2 0 1 0-4 0H6a1 1 0 0 1-1-1v-3a2 2 0 1 1 0-4V5a1 1 0 0 1 1-1z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="M15 9l6-3v12l-6-3"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M8 3v5h7"/><rect x="8" y="13" width="8" height="5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M11 9l4 3-4 3z"/></symbol>
+</svg>
+<header>
+  <span class="icon-box lg"><svg class="ic"><use href="#i-film"/></svg></span>
+  <h1>영상공방</h1>
+  <nav class="stepper" id="stepper">
+    <button class="step active" data-tab="script">① 자료·대본</button>
+    <span class="sep">—</span>
+    <button class="step" data-tab="deck">② PPTX·비주얼원고</button>
+    <span class="sep">—</span>
+    <button class="step" data-tab="images">③ 이미지</button>
+    <span class="sep">—</span>
+    <button class="step" data-tab="audio">④ 음성/자막</button>
+    <span class="sep">—</span>
+    <button class="step" data-tab="video">⑤ 영상</button>
+  </nav>
+  <span style="flex:1"></span>
+  <button id="gearBtn" class="iconbtn" title="설정 / 앱 로그인" aria-label="설정"><svg class="ic-inline"><use href="#i-gear"/></svg></button>
+  <a href="/" class="pill">← 메인</a>
+</header>
+
+<main>
+  <!-- 설정 패널 (⚙) -->
+  <div id="settingsPanel" class="settings-panel hidden">
+    <h3>설정</h3>
+    <div class="set-row">
+      <div>
+        <b>Google 계정 로그인</b> <span class="hint">(앱 로그인 · 선택)</span>
+        <div id="appLoginStatus" class="hint">상태 확인 중…</div>
+      </div>
+      <button id="googleLoginBtn" class="secondary">Google로 로그인</button>
+    </div>
+    <div class="set-row">
+      <div>
+        <b>NotebookLM 연결</b>
+        <div id="nlmStatusLine" class="hint">확인 중…</div>
+        <div class="hint">터미널에서 <code>nlm login</code> 후 '다시 확인'. (슬라이드/대본 생성에만 필요)</div>
+      </div>
+      <button id="nlmRecheck" class="secondary">다시 확인</button>
+    </div>
+  </div>
+
+  <!-- ① 대본 -->
+  <section class="panel" data-panel="script">
+    <!-- 인앱 분할 히어로 + 실데이터 프리뷰 -->
+    <div class="hero">
+      <div>
+        <div class="eyebrow">RAG · 딥리서치 · 로컬</div>
+        <h2>자료를 넣으면, 일반영상<span style="opacity:.6">(교육영상X)</span>용<br>슬라이드 원고가 한 번에.</h2>
+        <p>딥리서치로 뼈대를 잡고 → 회사 양식 PPTX 초안과 NotebookLM 비주얼원고를 같은 톤으로 만들고 → 음성·자막 샘플로 원고를 본 후 <b>일반영상 슬라이드를 확정</b>합니다. 교육용 슬라이드를 확정하고 <b>REC메이커</b>에서 교육영상을 시도해보세요.</p>
+        <button id="heroStart" class="cta">자료 첨부하고 시작 →</button>
+      </div>
+      <div class="hero-preview" id="heroPreview"></div>
+    </div>
+
+    <div class="card">
+      <h3><span class="icon-box ib-indigo"><svg class="ic"><use href="#i-doc"/></svg></span> 대본 — 생성 LLM
+        <span class="provtoggle" id="provToggle" style="display:none">
+          <button data-prov="codex" class="active">ChatGPT</button>
+        </span>
+        <span class="badge" id="llmBadge">확인 중…</span>
+        <button id="llmLoginBtn" class="secondary small">🖥️ ChatGPT 로그인(터미널)</button>
+        <select id="llmModel" class="small" style="max-width:240px" title="대본 생성 모델 — 빠른/가벼운 모델을 고르면 생성이 빨라지고 할당량을 아낍니다"></select>
+      </h3>
+
+      <!-- 목소리 / 타겟 / 목적 — 버튼형 선택 (파일첨부 위) -->
+      <div class="field-row">
+        <label style="margin-top:.32rem" title="로컬 TTS · 전체 기본값 · ③에서 씬별 변경 가능">목소리</label>
+        <select id="voiceStyle" class="hidden">
+          <option value="M1">남1 · 젊은</option>
+          <option value="M2">남2 · 따뜻한</option>
+          <option value="M3" selected>남3 · 차분한</option>
+          <option value="M4">남4 · 활기찬</option>
+          <option value="M5">남5 · 깊은</option>
+          <option value="F1">여1 · 젊은</option>
+          <option value="F2">여2 · 따뜻한</option>
+          <option value="F3">여3 · 차분한</option>
+          <option value="F4">여4 · 활기찬</option>
+          <option value="F5">여5 · 성숙한</option>
+        </select>
+        <div class="vrow-pills">
+          <div id="voicePills" class="pillgroup" data-for="voiceStyle" style="display:contents"></div>
+          <button id="voicePreviewBtn" class="small btn-listen">▶ 들어보기</button>
+        </div>
+      </div>
+      <div class="toolbar" style="margin-top:.4rem">
+        <span id="voicePreviewStatus" class="hint"></span>
+      </div>
+      <audio id="voicePreviewAudio" class="hidden" controls style="width:100%; margin-top:.5rem"></audio>
+
+      <div class="field-row">
+        <label>타겟 청중</label>
+        <select id="gAudience" class="hidden">
+          <option selected>대학생·일반인</option><option>중소기업 CEO</option><option>4060 지식창업자</option>
+          <option>임직원·실무자</option><option>투자자</option><option>학부모</option>
+        </select>
+        <div id="audiencePills" class="pillgroup" data-for="gAudience"></div>
+      </div>
+
+      <div class="field-row">
+        <label>발표 목적</label>
+        <select id="gObjective" class="hidden">
+          <option selected>교육</option><option>정보 전달</option><option>투자 유치</option><option>제안</option><option>마케팅</option>
+        </select>
+        <div id="objectivePills" class="pillgroup" data-for="gObjective"></div>
+      </div>
+
+      <!-- 파일 첨부 -->
+      <label id="srcDrop" class="filebox" style="min-height:84px; margin-top:.9rem">
+        <input id="srcFile" type="file" multiple accept=".pdf,.docx,.pptx,.xlsx,.xls,.epub,.txt,.md" hidden>
+        <span id="srcBoxText">📎 소스 파일 첨부 (여러 개 가능 · PDF·Word·PPT·Excel) — 이 내용으로 대본 생성</span>
+      </label>
+      <div id="srcChips" class="chips"></div>
+
+      <!-- 길이 옵션 (원문 글자수 기반 5/10/15/30분 → 슬라이드 수 자동 설정) -->
+      <div id="srcOptions" class="hidden" style="margin-top:.6rem"></div>
+
+      <!-- 슬라이드 수 — 위 길이 옵션이 자동 설정 · 직접 조정 가능 -->
+      <div class="row3" style="margin-top:.6rem">
+        <div><label>슬라이드 수 <span class="hint">(길이 옵션이 자동 설정)</span></label>
+          <select id="gTotal"><option>20</option><option>30</option><option>40</option><option>45</option><option selected>60</option></select></div>
+      </div>
+      <!-- 준비 도구 (대본 생성 전) — 도커 0 · 로컬. 자세한 설명: knowledge/vodstudio-rag-research.md -->
+      <div style="margin-top:.9rem; padding:.8rem; border:1px solid var(--border); border-radius:10px; background:var(--panel2)">
+        <div class="toolbar">
+          <button id="ragBtn" class="secondary">📚 자료 학습 (RAG)</button>
+          <button id="researchBtn" class="secondary">🔬 딥리서치 (자료 심층분석)</button>
+          <span id="prepStatus" class="hint"></span>
+        </div>
+        <p class="hint" style="margin:.45rem 0 0">📚 첨부 자료를 학습해 슬라이드마다 <b>관련 조문만 근거</b>로 씁니다(큰 문서도 안 잘림). · 🔬 핵심 <b>쟁점을 먼저 정리</b>해 뼈대를 잡습니다. <span class="pill">자세한 설명: knowledge/vodstudio-rag-research.md</span></p>
+        <details id="briefBox" class="hidden" style="margin-top:.5rem"><summary class="hint">🔬 리서치 브리프 보기</summary><pre id="briefOut" class="logs" style="max-height:260px"></pre></details>
+      </div>
+
+      <div class="toolbar" style="margin-top:.8rem">
+        <button id="genBtn">✦ 대본 생성</button>
+        <span id="genStatus" class="hint"></span>
+      </div>
+      <label style="margin-top:.6rem">대본 (수정 가능 · 직접 붙여넣기 OK · 빈 줄 = 슬라이드 구분)</label>
+      <textarea id="manualScript" style="min-height:240px" placeholder="**슬라이드 1**&#10;제목: ...&#10;상세 대본: ...&#10;&#10;(또는 문단별로 붙여넣기 — 문단 = 슬라이드 1장)"></textarea>
+      <div class="toolbar" style="margin-top:.5rem">
+        <button id="reviewBtn" class="secondary">✅ 대본 자동 검수</button>
+        <button id="autoReviewBtn" class="secondary">✨ 자동 정리(검수+수정 반복)</button>
+        <button id="reviseBtn" class="secondary hidden">🟡 검수 반영 수정</button>
+        <span id="copyScriptStatus" class="hint"></span>
+      </div>
+      <p class="hint">🔁 <b>자동 검수 ↔ 자동 정리</b>를 반복해 문제 없으면 → 아래 <b>‘번들 저장’으로 최종 저장(대본 확정)</b> → ②에서 슬라이드·비주얼 제작. (NotebookLM 소스 복사 버튼은 ②로 옮겼어요.)</p>
+      <p class="hint">💡 <b>상세 대본</b>이 ③ 음성/자막에서 <b>TTS가 읽는 목소리 대본</b>이 됩니다. (화면 텍스트는 슬라이드용) · ✅ 검수 = RAG 근거와 대조해 누락/부정확 점검(근거 자료 학습 필요).</p>
+      <details id="reviewBox" class="hidden" style="margin-top:.4rem"><summary class="hint">✅ 검수 결과 보기</summary><pre id="reviewOut" class="logs" style="max-height:300px"></pre></details>
+
+      <!-- 🧩 NotebookLM 렌더 코드는 ②로 이동(슬라이드와 동시 생성) -->
+    </div>
+
+    <div class="card">
+      <h3><span class="icon-box ib-green"><svg class="ic"><use href="#i-save"/></svg></span> 번들 저장 / 불러오기</h3>
+      <p class="hint">대본을 만든 뒤 여기서 <b>저장</b>(체크포인트 · 덮어쓰기 OK) → 이후 ②이미지·③음성·④영상으로 이어집니다. 저장한 번들은 아래에서 <b>불러오기</b>로 이어갈 수 있어요.</p>
+      <div class="row3" style="max-width:820px">
+        <div><label>chapter 번호</label><input id="chapter" type="number" value="1" min="1"></div>
+        <div><label>번들 제목</label><input id="bundleTitle" value="VOD Studio Deck"></div>
+        <div><label>&nbsp;</label><button id="saveBtn">💾 번들 저장</button></div>
+      </div>
+      <p class="hint">목소리는 위에서 고른 값(<span id="voiceEcho">기본</span>)이 전체 기본으로 저장됩니다. 씬별로 다르게 하려면 ③에서 바꾸세요.</p>
+      <label>출력 폴더 (mediaforge 프로젝트 경로 · 비우면 앱 내부)</label>
+      <input id="outputDir" placeholder="예: D:\00work\inputs  (5개 폴더는 여기 _assets\chNN_bundle\ 안에 생성)">
+      <div id="saveStatus" class="hint" style="margin-top:.4rem"></div>
+      <div id="saveResult" style="margin-top:.4rem"></div>
+      <details style="margin-top:.5rem"><summary class="hint">생성된 chNN_script.json 미리보기</summary>
+        <pre id="jsonPreview" class="logs" style="max-height:300px"></pre></details>
+      <hr style="border:none; border-top:1px solid var(--border); margin:.9rem 0">
+      <div class="toolbar">
+        <b style="white-space:nowrap">📂 불러오기</b>
+        <button id="bundlesRefresh" class="secondary small" title="목록 새로고침">🔄 새로고침</button>
+        <span id="loadStatus" class="hint"></span>
+      </div>
+      <div id="bundleList" class="bundlelist"></div>
+      <div style="margin-top:.7rem; padding:.7rem; border:1px solid var(--border); border-radius:8px; background:var(--panel2)">
+        <label style="margin-top:0">경로 직접 입력 (번들 폴더 · <code>…\_assets\chNN_bundle</code>)</label>
+        <div class="toolbar">
+          <input id="bundleDirInput" style="flex:1; min-width:240px" placeholder="예: D:\00work\inputs\_assets\ch02_bundle">
+          <button id="bundleDirLoadBtn" class="secondary small">이 경로로 불러오기</button>
+        </div>
+      </div>
+      <details style="margin-top:.5rem"><summary class="hint">ⓘ 불러오기란?</summary>
+        <p class="hint" style="margin:.3rem 0 0">재시작 후에도 이어가기 — 고르면 ①대본·②이미지·④영상까지 복원됩니다. 출력 폴더를 쓰면 위 '출력 폴더'에 경로 넣고 🔄 누르세요. · 🗑 삭제는 폴더를 영구 삭제합니다(되돌릴 수 없음).</p></details>
+    </div>
+    <div class="toolbar"><button id="nextImages" class="secondary">다음: ② PPTX·비주얼원고 →</button></div>
+  </section>
+
+  <!-- ② PPTX · 비주얼원고 (한 페이지: 좌 비주얼 프롬프트 · 우 회사 PPTX) -->
+  <section class="panel hidden" data-panel="deck">
+    <div class="card block block-lime">
+      <h3>② 슬라이드 만들기 — 회사 PPTX + NotebookLM(슬라이드덱·비주얼원고)</h3>
+      <p class="hint">스타일을 하나 고르면 <b>NotebookLM 렌더코드·비주얼원고가 같은 톤으로 규정</b>됩니다(15종, 추가 가능).
+        회사 PPTX는 오른쪽에서 생성. → 이미지(③~⑤)는 둘 중 <b>하나</b>만 넣어 진행하세요(권장: 회사 PPTX). NotebookLM 비주얼은 캡처해 PPTX에 <b>수동</b> 삽입·순서 조정.</p>
+    </div>
+
+    <!-- 공유 스타일 (15종 · 규정 = data/visual_styles.json) -->
+    <div class="card">
+      <h3><span class="icon-box ib-violet"><svg class="ic"><use href="#i-palette"/></svg></span> 슬라이드 스타일 <span class="hint">— 15종(추가 가능) · NotebookLM 렌더코드 + 비주얼원고에 공통 적용</span></h3>
+      <div class="toolbar">
+        <label style="margin:0">스타일</label>
+        <select id="visualStyle" class="small" style="max-width:340px"></select>
+      </div>
+      <div class="toolbar" id="visualIntensity" style="margin-top:.4rem"></div>
+    </div>
+
+    <div class="deck-grid">
+      <!-- 좌: NotebookLM (렌더코드 슬라이드덱 + 비주얼원고 프롬프트) -->
+      <div class="card">
+        <h3><span class="icon-box ib-teal"><svg class="ic"><use href="#i-image"/></svg></span> NotebookLM — 슬라이드덱 + 비주얼원고 <span class="hint">· 흰 배경</span></h3>
+
+        <div class="toolbar" style="margin-bottom:.7rem">
+          <button id="copyScriptBtn" class="secondary">📋 ① 대본 복사 (NotebookLM 소스로 붙여넣기)</button>
+          <span id="copyStatus2" class="hint"></span>
+        </div>
+
+        <details id="renderBox" open style="border:1px solid var(--border); border-radius:10px; padding:.1rem .85rem .85rem; background:var(--panel2)">
+          <summary style="cursor:pointer; padding:.65rem 0; font-weight:600; font-size:.92rem"><svg class="ic-inline"><use href="#i-puzzle"/></svg> 렌더 코드(슬라이드덱) <span class="hint" style="font-weight:400">· 챗에 붙여넣어 생성</span></summary>
+          <div class="row" style="max-width:420px">
+            <div><label>총 슬라이드</label><input id="rcTotal" type="number" value="60" min="4" max="120"></div>
+            <div><label>한 번에(청크) · 기본 20 (작을수록 일관성↑)</label><input id="rcChunk" type="number" value="20" min="3" max="40"></div>
+          </div>
+          <details id="designAdv" style="margin-top:.5rem">
+            <summary class="hint">🎨 디자인 시스템 (위 스타일에서 자동 채움 · 편집 가능)</summary>
+            <input id="designName" type="hidden" value="">
+            <textarea id="designSystem" style="min-height:150px; font-size:.82rem; font-family:ui-monospace,Consolas,monospace; margin-top:.4rem"></textarea>
+            <div class="toolbar" style="margin-top:.4rem"><button id="designSaveBtn" type="button" class="secondary small">💾 이 디자인 저장</button><span id="designStatus" class="hint"></span></div>
+          </details>
+          <div class="toolbar" style="margin-top:.6rem">
+            <button id="rcRecommendBtn" type="button" class="secondary small">📐 대본 보고 추천</button>
+            <button id="rcGenBtn" class="secondary">렌더 코드 생성</button>
+            <button id="rcCopyBtn" class="secondary hidden">📋 복사</button>
+            <span id="rcRecommend" class="hint"></span>
+          </div>
+          <textarea id="rcOut" class="logs" style="min-height:140px; margin-top:.5rem; display:none" readonly></textarea>
+          <p class="hint"><b>사용법:</b> ① 대본을 NotebookLM 소스로 추가 → 이 코드를 챗에 붙여넣고 전송 → 슬라이드덱 PDF 다운로드 → ③ 이미지에 순서대로 넣기. (한 번에 ~45장에서 끊기면 청크를 15로)</p>
+        </details>
+
+        <div style="margin-top:.9rem">
+          <div class="toolbar">
+            <button id="genVisualBtn">✦ 슬라이드별 비주얼원고 프롬프트 생성</button>
+            <span id="visualStatus" class="hint"></span>
+          </div>
+          <div id="visualList" class="visual-list" style="margin-top:.6rem"></div>
+        </div>
+      </div>
+
+      <!-- 우: 회사 양식 PPTX 초안 -->
+      <div class="card">
+        <h3><span class="icon-box ib-indigo"><svg class="ic"><use href="#i-building"/></svg></span> 회사 양식 PPTX 초안</h3>
+        <p class="hint">회사 양식 1개(<code>assets/templates/pptx_template.pptx</code>)로 생성 · <b>표지 없이</b> 본문 슬라이드만, ① 대본과 1:1(개수도 대본 분량 40/60장).
+          <br><b>비주얼(삽화·메타포)은 왼쪽 NotebookLM에서 캡처해 같은 번호 슬라이드에 수동으로 얹으세요.</b></p>
+        <label style="margin-top:.2rem">파일 이름 (선택)</label>
+        <input id="pptxTitle" placeholder="예: 새뮤얼슨 경제학 5부">
+        <div class="toolbar" style="margin-top:.6rem">
+          <button id="genPptxBtn">⬇ PPTX 생성·다운로드</button>
+          <span id="pptxStatus" class="hint"></span>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar"><button id="nextImages2" class="secondary">다음: ③ 이미지 →</button></div>
+  </section>
+
+  <!-- ③ 이미지 (회사 PPTX 초안 또는 NotebookLM 슬라이드 PDF) -->
+  <section class="panel hidden" data-panel="images">
+    <div class="card">
+      <h3><span class="icon-box ib-teal"><svg class="ic"><use href="#i-image"/></svg></span> 이미지 — 회사 PPTX 초안 / NotebookLM PDF (순서대로) <span class="hint">· 샘플영상(원고확정용)</span></h3>
+      <p class="hint">②에서 만든 <b>회사 PPTX(.pptx)</b> 또는 NotebookLM 슬라이드덱 <b>PDF</b>를 <b>순서대로</b> 넣으세요(자동으로 이미지화). 비주얼원고가 붙기 전 초안으로 음성·자막 샘플을 만들어 <b>원고 확정</b>을 돕는 단계입니다.</p>
+      <div id="pdfSlots"></div>
+      <div id="imgStatus" class="hint" style="margin-top:.5rem"></div>
+      <div id="imgPath" class="hint hidden" style="margin-top:.4rem; padding:.4rem .6rem; border:1px solid var(--border); border-radius:6px; font-family:ui-monospace,Consolas,monospace; word-break:break-all; background:var(--panel2)"></div>
+      <div id="thumbs" class="thumbs" style="margin-top:.8rem"></div>
+    </div>
+
+    <div class="card">
+      <h3><span class="icon-box ib-green"><svg class="ic"><use href="#i-save"/></svg></span> 번들 저장 (이미지 포함)</h3>
+      <p class="hint">이미지를 넣었으면 여기서 다시 <b>저장</b>(덮어쓰기) — 대본만 저장했던 번들에 이미지가 합쳐집니다. chapter·제목·출력폴더는 ① 대본 하단에서 설정해요.</p>
+      <div class="toolbar"><button id="saveBtn2">💾 번들 저장</button><span id="saveStatus2" class="hint"></span></div>
+    </div>
+    <div class="toolbar"><button id="nextAudio" class="secondary">다음: ③ 음성/자막 →</button></div>
+  </section>
+
+  <!-- ③ 음성/자막 -->
+  <section class="panel hidden" data-panel="audio">
+    <div class="card">
+      <h3><span class="icon-box ib-amber"><svg class="ic"><use href="#i-mic"/></svg></span> 음성 / 자막 <span class="hint">· 로컬 CPU TTS</span></h3>
+      <div class="toolbar">
+        <button id="synthAllBtn">🔊 전체 음성/자막 생성</button>
+        <button id="pronDictBtn" class="secondary">📖 발음 사전</button>
+        <span id="audioStatus" class="hint">번들 저장 후 사용할 수 있어요.</span>
+      </div>
+      <div class="bar hidden" id="synthBar"><div id="synthBarFill"></div></div>
+      <div style="margin-top:.5rem">
+        <span class="hint">전체 보이스</span>
+        <select id="voiceAll" class="hidden"></select>
+        <div id="voiceAllPills" class="pillgroup" data-for="voiceAll"></div>
+        <div class="toolbar" style="margin-top:.5rem">
+          <button id="voiceAllBtn" class="secondary small" type="button">전체 적용</button>
+          <span id="voiceAllStatus" class="hint"></span>
+        </div>
+      </div>
+      <p class="hint">발음이 이상하면 ① <b>발음 사전</b>에 단어를 추가하고 → 그 씬만 🔁 재생성하세요. (발음 사전은 TTS 입력에만 적용, 자막 원문은 유지) 싱크가 어긋나면 타이밍을 직접 조정/저장.</p>
+      <div id="pronPanel" class="hidden" style="margin-top:.6rem; padding:.8rem; border:1px solid var(--border); border-radius:8px; background:var(--panel2)">
+        <p class="hint" style="margin:0 0 .4rem">한 줄에 하나: <code>원문 =&gt; 발음</code> (예: <code>KOSHA =&gt; 코샤</code>, <code>MSDS =&gt; 엠에스디에스</code>). 영문 약어·헷갈리는 한자어를 넣어두면 그 발음으로 읽습니다.</p>
+        <textarea id="pronText" style="min-height:220px; font-family:ui-monospace,Consolas,monospace; font-size:.85rem"></textarea>
+        <div class="toolbar" style="margin-top:.5rem">
+          <button id="pronSaveBtn">💾 발음 사전 저장</button>
+          <button id="pronCloseBtn" class="secondary">닫기</button>
+          <span id="pronStatus" class="hint"></span>
+        </div>
+      </div>
+      <div id="sceneCards" style="margin-top:.8rem"></div>
+      <div class="toolbar" style="margin-top:.8rem">
+        <button id="saveBtn3">💾 번들 저장</button>
+        <span id="saveStatus3" class="hint">음성·자막·발음 편집은 자동 저장돼요. 이 버튼은 ① 대본+이미지 기준으로 번들을 덮어씁니다.</span>
+      </div>
+    </div>
+    <div class="toolbar"><button id="nextVideo" class="secondary">다음: ④ 영상 →</button></div>
+  </section>
+
+  <!-- ④ 영상 (mp4maker 렌더) -->
+  <section class="panel hidden" data-panel="video">
+    <div class="card">
+      <h3><span class="icon-box ib-coral"><svg class="ic"><use href="#i-video"/></svg></span> 영상 — mp4maker 합성</h3>
+      <div class="row" style="max-width:640px">
+        <div><label>모드</label>
+          <select id="renderMode">
+            <option value="voiced">음성 포함 (생성한 WAV)</option>
+            <option value="silent">무음 미리보기</option>
+          </select></div>
+        <div><label>해상도</label>
+          <select id="resolution">
+            <option value="1280x720" selected>1280x720 (빠름)</option>
+            <option value="1920x1080">1920x1080</option>
+          </select></div>
+      </div>
+      <label class="toolbar" style="margin-top:.7rem; cursor:pointer">
+        <input type="checkbox" id="noSubtitles" style="width:auto">
+        <span>자막 굽지 않기 (유튜브용 <b>클린 영상</b> + <code>.srt</code> 별도) — <code>chNN_final_nosub.mp4</code>. (<b>기본: 자막 구운 <code>chNN_final.mp4</code></b> · 체크하면 클린본)</span>
+      </label>
+      <div class="toolbar" style="margin-top:.6rem">
+        <button id="dryRunBtn" class="secondary">🔍 검증만 (dry-run)</button>
+        <button id="renderBtn">🎬 풀 렌더</button>
+        <button id="clearDraftBtn" class="secondary">🗑 기존 결과 삭제</button>
+        <button id="openDraftBtn" class="secondary">📂 결과 폴더 열기</button>
+        <a id="videoLink" class="hidden" href="#" target="_blank"><button class="secondary" type="button">새 탭에서 재생</button></a>
+      </div>
+      <div class="bar" id="renderBar" style="display:none"><div id="renderBarFill"></div></div>
+      <h3 style="margin-top:1rem">진행 로그</h3>
+      <div id="renderLogs" class="logs" style="min-height:120px"></div>
+      <video id="player" class="hidden" controls style="width:100%; margin-top:.8rem; border:1px solid var(--border); border-radius:8px; background:#000"></video>
+      <p class="hint" style="margin-top:.6rem">자막 굽지 않기 = 유튜브에 깨끗한 영상 올리고, 같은 폴더의 <code>.srt</code>를 유튜브 자막으로 따로 업로드하세요.</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="icon-box ib-coral"><svg class="ic"><use href="#i-play"/></svg></span> 유튜브 업로드 메타 <span class="hint">· 영상 생성 마무리</span></h3>
+      <p class="hint">고품격 다큐 형식의 <b>제목·설명·태그</b>와 <b>타임라인(Chapters)</b>을 자동 생성합니다. 아래 <b>책 제목·장 번호·장 제목</b>을 넣으면 제목에 그대로 반영돼요(비우면 대본 JSON 값 사용). 챕터 시간은 ④ 렌더 결과 실제 시작시각 <code>HH:MM:SS</code> 기준.</p>
+      <div class="row3" style="max-width:860px; margin-bottom:.5rem">
+        <div><label>책(시리즈) 제목</label><input id="ytBook" placeholder="예: 배움을 설계하는 기술의 역사"></div>
+        <div><label>장 번호</label><input id="ytChapNo" placeholder="예: 1"></div>
+        <div><label>장 제목</label><input id="ytChapTitle" placeholder="예: 편지와 전파가 만든 교실"></div>
+      </div>
+      <div class="toolbar">
+        <button id="ytMetaBtn" class="secondary">📺 유튜브 메타 생성</button>
+        <button id="ytCopyBtn" class="secondary hidden">📋 복사</button>
+        <button id="ytClearBtn" class="secondary hidden">🗑 삭제</button>
+        <span id="ytStatus" class="hint"></span>
+      </div>
+      <pre id="ytOut" class="hidden" style="max-height:none; margin-top:.5rem; background:#ffffff; color:#111827; border:1px solid var(--border); border-radius:8px; padding:.9rem 1rem; white-space:pre-wrap; word-break:break-word; line-height:1.65; font-size:.92rem; font-family:inherit"></pre>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="/static/vodstudio/app.js"></script>
+</body>
+</html>
