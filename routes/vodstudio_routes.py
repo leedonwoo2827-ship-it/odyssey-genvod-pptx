@@ -65,7 +65,7 @@ class BuildBundleRequest(BaseModel):
 class RenderRequest(BaseModel):
     mode: str = "silent"            # silent (placeholder audio) | voiced (user-supplied WAVs)
     resolution: str = "1920x1080"   # or 1280x720 for a faster preview
-    no_subtitles: bool = False      # True → 자막 안 구운 클린본(chNN_final_nosub.mp4) + .srt (유튜브용)
+    no_subtitles: bool = False      # True → 클린본(chNN_final.mp4) + .srt만(유튜브용, softsub 생략) / False → softsub 트랙 mp4도 추가
     dry_run: bool = False           # 검증만 (ffmpeg 호출 없이 플랜만)
 
 
@@ -409,6 +409,60 @@ def setup_vodstudio_routes() -> APIRouter:
             str(out),
             media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
             filename=fname,
+        )
+
+    class PptxOcrRequest(BaseModel):
+        title: str = ""
+        subtitle: str = ""
+
+    @router.post("/jobs/{job_id}/pptx-ocr")
+    async def pptx_from_ocr(job_id: str, body: PptxOcrRequest, request: Request):
+        """③ 이미지(NotebookLM 슬라이드)에서 텍스트를 OCR로 추출해 회사 양식 PPTX 생성.
+
+        NotebookLM 글자는 이미지에 박혀 복사가 안 되므로 OCR로 '얼추' 뽑아 우리 폰트로
+        재배치한다. 그림은 PPTX에 넣지 않음(사용자가 수동 삽입). 첫 줄=제목, 나머지=본문.
+        """
+        import tempfile
+        from services.vodstudio import pptx_export, voice_studio as vs, ocr
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        bdir = (job.result.get("bundle") or {}).get("bundle_dir")
+        if not bdir or not Path(bdir).exists():
+            raise HTTPException(400, "먼저 ③ 이미지에서 번들을 저장하세요. (저장된 이미지에서 OCR합니다)")
+        bimgs = Path(bdir) / "images"
+        images = sorted(bimgs.glob("ch*_*_slide.png")) or sorted(bimgs.glob("*.png"))
+        if not images:
+            raise HTTPException(400, "번들에 슬라이드 이미지가 없습니다. ③에서 이미지를 넣고 저장하세요.")
+        if not ocr.available():
+            raise HTTPException(
+                501,
+                "OCR 엔진이 없습니다. Windows는 '한국어' OCR 언어팩, mac/linux는 "
+                "Tesseract(kor) 또는 'pip install easyocr' 가 필요합니다.",
+            )
+        # 번들 폴더 안 pptx\ 에 저장(산물 한곳에 모음) + 그 파일을 그대로 다운로드.
+        import re as _re
+        safe = _re.sub(r'[\\/:*?"<>|]+', "_", (body.title.strip() or "회사양식_PPTX초안_OCR")).strip() or "회사양식_PPTX초안_OCR"
+        pptx_dir = Path(bdir) / "pptx"
+        pptx_dir.mkdir(parents=True, exist_ok=True)
+        out = pptx_dir / f"{safe}.pptx"
+        try:
+            def _build():
+                payload = pptx_export.slides_payload_from_images(
+                    [str(p) for p in images], title=body.title, subtitle=body.subtitle)
+                return pptx_export.render_company_pptx(payload, str(out))
+            await asyncio.to_thread(_build)
+        except ocr.OcrUnavailable as e:
+            raise HTTPException(501, str(e))
+        except Exception as e:
+            raise HTTPException(502, f"OCR PPTX 생성 실패: {e}")
+        fname = (body.title.strip() or "회사양식_PPTX초안_OCR") + ".pptx"
+        from urllib.parse import quote as _q
+        return FileResponse(
+            str(out),
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            filename=fname,
+            headers={"X-Saved-Path": _q(str(out))},  # 한글 경로 → HTTP 헤더(latin-1) 안전하게 URL 인코딩
         )
 
     # ---- 15스타일 NotebookLM 비주얼원고 프롬프트 (PPTX 초안과 같은 페이지) ----
@@ -828,6 +882,27 @@ def setup_vodstudio_routes() -> APIRouter:
         except Exception as e:  # noqa: BLE001
             raise HTTPException(400, f"이미지 변환 실패: {e}")
         return {"ok": True, "index": int(index), "targets": [str(t) for t in targets]}
+
+    class InsertSceneRequest(BaseModel):
+        after_scene: int          # 이 씬 '뒤'에 삽입 (0 = 맨 앞)
+        copy: bool = True         # True=그 씬 복제 / False=빈 씬
+
+    @router.post("/jobs/{job_id}/insert-scene")
+    async def insert_scene(job_id: str, body: InsertSceneRequest, request: Request):
+        """③ 씬 삽입 — NotebookLM이 합쳐 줄어든 씬(예: 60→59) 복원용.
+        대본 JSON 재번호 + images/audio/subtitles 파일을 한 칸씩 밀어 정렬한다."""
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        bdir = (job.result.get("bundle") or {}).get("bundle_dir")
+        if not bdir or not Path(bdir).exists():
+            raise HTTPException(400, "먼저 ③ 이미지에서 번들을 저장하세요.")
+        from services.vodstudio import voice_studio as vs
+        try:
+            r = await asyncio.to_thread(vs.insert_scene, bdir, int(body.after_scene), bool(body.copy))
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, f"씬 삽입 실패: {e}")
+        return {"ok": True, **r}
 
     # ---- ③ 저장: 대본 + (렌더된)이미지 → mediaforge 번들 ----
     @router.post("/jobs/{job_id}/save")
@@ -1275,6 +1350,34 @@ def setup_vodstudio_routes() -> APIRouter:
             raise HTTPException(500, f"폴더 열기 실패: {e}")
         return {"opened": str(target)}
 
+    class OpenFolderRequest(BaseModel):
+        sub: str = ""   # 번들 하위 폴더(예: "pptx", "images"). 빈 값이면 번들 루트.
+
+    @router.post("/jobs/{job_id}/open-folder")
+    async def open_folder(job_id: str, body: OpenFolderRequest, request: Request):
+        """번들의 특정 하위 폴더를 파일 탐색기로 연다 (로컬 전용). 예: pptx 폴더."""
+        job = manager.get(job_id, _owner(request))
+        if not job:
+            raise HTTPException(404, "Job not found")
+        bdir = (job.result.get("bundle") or {}).get("bundle_dir")
+        if not bdir or not Path(bdir).exists():
+            raise HTTPException(400, "먼저 번들을 저장하세요.")
+        import os as _os, sys as _sys, subprocess as _sp, re as _re
+        sub = _re.sub(r"[^A-Za-z0-9_]", "", body.sub or "")  # 경로 주입 방지
+        target = (Path(bdir) / sub) if sub else Path(bdir)
+        if not target.is_dir():
+            target = Path(bdir)
+        try:
+            if _sys.platform == "win32":
+                _os.startfile(str(target))  # noqa: S606
+            elif _sys.platform == "darwin":
+                _sp.Popen(["open", str(target)])
+            else:
+                _sp.Popen(["xdg-open", str(target)])
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(500, f"폴더 열기 실패: {e}")
+        return {"opened": str(target)}
+
     # ---- 기존 번들 불러오기 (재시작 후에도 작업 이어가기) -----------------
     @router.get("/bundles")
     async def list_existing_bundles(request: Request, root: str = ""):
@@ -1303,12 +1406,24 @@ def setup_vodstudio_routes() -> APIRouter:
                         pass
                 draft = pp / "draft"
                 has_render = draft.is_dir() and any(draft.glob("*_final*.mp4"))
+
+                def _cnt(sub, *globs):
+                    d = pp / sub
+                    if not d.is_dir():
+                        return 0
+                    return sum(len(list(d.glob(g))) for g in globs)
+
+                images = _cnt("images", "*.png", "*.jpg", "*.jpeg")
+                audio = _cnt("audio", "*.wav", "*.mp3")
+                subs = _cnt("subtitles", "*.srt")
                 try:
                     mtime = pp.stat().st_mtime
                 except OSError:
                     mtime = 0
                 out.append({"bundle_dir": str(pp), "name": pp.name, "title": title,
-                            "scenes": scenes, "has_render": bool(has_render), "mtime": mtime})
+                            "scenes": scenes, "has_script": bool(hits),
+                            "images": images, "audio": audio, "subtitles": subs,
+                            "has_render": bool(has_render), "mtime": mtime})
         out.sort(key=lambda b: b["mtime"], reverse=True)
         return {"bundles": out}
 

@@ -98,7 +98,7 @@
   .ic { width:1.05rem; height:1.05rem; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
   .icon-box.lg .ic { width:1.25rem; height:1.25rem; }
   .ic-inline { width:1rem; height:1rem; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; vertical-align:-.15em; }
-  /* mediaforge식 진행 스테퍼(녹색 점) */
+  /* 진행 스테퍼(단계 점) */
   .stepper { display:flex; align-items:center; gap:.4rem; margin-left:1rem; font-size:.85rem; }
   .stepper .step { color:var(--muted); padding:.25rem .6rem; border-radius:999px; border:1px solid transparent; background:transparent; font:inherit; cursor:pointer; display:flex; align-items:center; gap:.35rem; }
   .stepper .step::before { content:"●"; color:var(--border); font-size:.7rem; }
@@ -211,13 +211,15 @@
   <nav class="stepper" id="stepper">
     <button class="step active" data-tab="script">① 자료·대본</button>
     <span class="sep">—</span>
-    <button class="step" data-tab="deck">② PPTX·비주얼원고</button>
+    <button class="step" data-tab="deck">② 비주얼원고</button>
     <span class="sep">—</span>
     <button class="step" data-tab="images">③ 이미지</button>
     <span class="sep">—</span>
-    <button class="step" data-tab="audio">④ 음성/자막</button>
+    <button class="step" data-tab="pptx">④ PPTX</button>
     <span class="sep">—</span>
-    <button class="step" data-tab="video">⑤ 영상</button>
+    <button class="step" data-tab="audio">⑤ 음성/자막</button>
+    <span class="sep">—</span>
+    <button class="step" data-tab="video">⑥ 영상</button>
   </nav>
   <span style="flex:1"></span>
   <button id="gearBtn" class="iconbtn" title="설정 / 앱 로그인" aria-label="설정"><svg class="ic-inline"><use href="#i-gear"/></svg></button>
@@ -323,7 +325,7 @@
       <!-- 슬라이드 수 — 위 길이 옵션이 자동 설정 · 직접 조정 가능 -->
       <div class="row3" style="margin-top:.6rem">
         <div><label>슬라이드 수 <span class="hint">(길이 옵션이 자동 설정)</span></label>
-          <select id="gTotal"><option>20</option><option>30</option><option>40</option><option>45</option><option selected>60</option></select></div>
+          <select id="gTotal"><option>20</option><option>30</option><option>40</option><option>50</option><option selected>60</option></select></div>
       </div>
       <!-- 준비 도구 (대본 생성 전) — 도커 0 · 로컬. 자세한 설명: knowledge/vodstudio-rag-research.md -->
       <div style="margin-top:.9rem; padding:.8rem; border:1px solid var(--border); border-radius:10px; background:var(--panel2)">
@@ -344,11 +346,10 @@
       <textarea id="manualScript" style="min-height:240px" placeholder="**슬라이드 1**&#10;제목: ...&#10;상세 대본: ...&#10;&#10;(또는 문단별로 붙여넣기 — 문단 = 슬라이드 1장)"></textarea>
       <div class="toolbar" style="margin-top:.5rem">
         <button id="reviewBtn" class="secondary">✅ 대본 자동 검수</button>
-        <button id="autoReviewBtn" class="secondary">✨ 자동 정리(검수+수정 반복)</button>
         <button id="reviseBtn" class="secondary hidden">🟡 검수 반영 수정</button>
         <span id="copyScriptStatus" class="hint"></span>
       </div>
-      <p class="hint">🔁 <b>자동 검수 ↔ 자동 정리</b>를 반복해 문제 없으면 → 아래 <b>‘번들 저장’으로 최종 저장(대본 확정)</b> → ②에서 슬라이드·비주얼 제작. (NotebookLM 소스 복사 버튼은 ②로 옮겼어요.)</p>
+      <p class="hint">🔁 <b>✅ 검수</b>로 🔴/🟡 확인 → 필요하면 <b>🟡 검수 반영 수정</b>으로 다듬기 → 문제 없으면 아래 <b>‘번들 저장’으로 최종 저장(대본 확정)</b> → ②에서 슬라이드·비주얼 제작. (NotebookLM 소스 복사 버튼은 ②로 옮겼어요.)</p>
       <p class="hint">💡 <b>상세 대본</b>이 ③ 음성/자막에서 <b>TTS가 읽는 목소리 대본</b>이 됩니다. (화면 텍스트는 슬라이드용) · ✅ 검수 = RAG 근거와 대조해 누락/부정확 점검(근거 자료 학습 필요).</p>
       <details id="reviewBox" class="hidden" style="margin-top:.4rem"><summary class="hint">✅ 검수 결과 보기</summary><pre id="reviewOut" class="logs" style="max-height:300px"></pre></details>
 
@@ -364,8 +365,14 @@
         <div><label>&nbsp;</label><button id="saveBtn">💾 번들 저장</button></div>
       </div>
       <p class="hint">목소리는 위에서 고른 값(<span id="voiceEcho">기본</span>)이 전체 기본으로 저장됩니다. 씬별로 다르게 하려면 ③에서 바꾸세요.</p>
-      <label>출력 폴더 (mediaforge 프로젝트 경로 · 비우면 앱 내부)</label>
-      <input id="outputDir" placeholder="예: D:\00work\inputs  (5개 폴더는 여기 _assets\chNN_bundle\ 안에 생성)">
+      <label>출력 폴더 <span class="hint" style="font-weight:400">· 비우면 앱 내부(난수 폴더)에 저장 · 지정하면 챕터별로 정리</span></label>
+      <input id="outputDir" placeholder="예: D:\00work\260629-od-notebooklm-pptslide\_outputs">
+      <p class="hint" style="margin:.35rem 0 0">권장 경로:
+        <code id="outDirSample" style="cursor:pointer" title="클릭하면 입력칸에 넣기">D:\00work\260629-od-notebooklm-pptslide\_outputs</code>
+        <button type="button" id="outDirCopy" class="secondary small">복사</button>
+        <button type="button" id="outDirUse" class="secondary small">이 경로 넣기</button>
+        <span id="outDirStatus" class="hint"></span>
+        <br>모든 챕터가 여기 <code>_outputs\_assets\chNN_bundle\</code> 에 정리됩니다(난수 폴더 없음).</p>
       <div id="saveStatus" class="hint" style="margin-top:.4rem"></div>
       <div id="saveResult" style="margin-top:.4rem"></div>
       <details style="margin-top:.5rem"><summary class="hint">생성된 chNN_script.json 미리보기</summary>
@@ -380,7 +387,7 @@
       <div style="margin-top:.7rem; padding:.7rem; border:1px solid var(--border); border-radius:8px; background:var(--panel2)">
         <label style="margin-top:0">경로 직접 입력 (번들 폴더 · <code>…\_assets\chNN_bundle</code>)</label>
         <div class="toolbar">
-          <input id="bundleDirInput" style="flex:1; min-width:240px" placeholder="예: D:\00work\inputs\_assets\ch02_bundle">
+          <input id="bundleDirInput" style="flex:1; min-width:240px" placeholder="예: D:\00work\260629-od-notebooklm-pptslide\_outputs\_assets\ch19_bundle">
           <button id="bundleDirLoadBtn" class="secondary small">이 경로로 불러오기</button>
         </div>
       </div>
@@ -393,19 +400,22 @@
   <!-- ② PPTX · 비주얼원고 (한 페이지: 좌 비주얼 프롬프트 · 우 회사 PPTX) -->
   <section class="panel hidden" data-panel="deck">
     <div class="card block block-lime">
-      <h3>② 슬라이드 만들기 — 회사 PPTX + NotebookLM(슬라이드덱·비주얼원고)</h3>
-      <p class="hint">스타일을 하나 고르면 <b>NotebookLM 렌더코드·비주얼원고가 같은 톤으로 규정</b>됩니다(15종, 추가 가능).
-        회사 PPTX는 오른쪽에서 생성. → 이미지(③~⑤)는 둘 중 <b>하나</b>만 넣어 진행하세요(권장: 회사 PPTX). NotebookLM 비주얼은 캡처해 PPTX에 <b>수동</b> 삽입·순서 조정.</p>
+      <h3>② 비주얼원고 — NotebookLM 슬라이드덱(흰 배경)</h3>
+      <p class="hint">스타일을 하나 고르면 <b>NotebookLM 렌더코드가 그 톤으로 규정</b>됩니다(15종, 추가 가능).
+        ① 대본을 NotebookLM 소스로 넣고 → 아래 렌더 코드를 챗/맞춤설정에 붙여 슬라이드덱을 만든 뒤 → <b>③ 이미지</b>로 PDF를 넣습니다.
+        <br>회사 PPTX는 이미지 다음 <b>④ PPTX</b> 단계에서 그 이미지의 텍스트를 OCR해 만듭니다.</p>
     </div>
 
     <!-- 공유 스타일 (15종 · 규정 = data/visual_styles.json) -->
     <div class="card">
-      <h3><span class="icon-box ib-violet"><svg class="ic"><use href="#i-palette"/></svg></span> 슬라이드 스타일 <span class="hint">— 15종(추가 가능) · NotebookLM 렌더코드 + 비주얼원고에 공통 적용</span></h3>
-      <div class="toolbar">
-        <label style="margin:0">스타일</label>
-        <select id="visualStyle" class="small" style="max-width:340px"></select>
+      <h3><span class="icon-box ib-violet"><svg class="ic"><use href="#i-palette"/></svg></span> 슬라이드 스타일 <span class="hint">— NotebookLM 렌더코드 + 비주얼원고에 공통 적용 · 하나씩 테스트해 확정</span></h3>
+      <select id="visualStyle" class="hidden"></select>
+      <div id="visualStylePills" class="pillgroup"></div>
+      <div class="toolbar" style="margin-top:.5rem">
+        <button id="styleTestedBtn" class="secondary small">✅ 이 스타일 테스트 완료</button>
+        <button id="styleResetTestedBtn" class="secondary small" title="이 스타일의 테스트 완료 표시 해제">↩︎ 해제</button>
+        <span id="styleTestedStatus" class="hint"></span>
       </div>
-      <div class="toolbar" id="visualIntensity" style="margin-top:.4rem"></div>
     </div>
 
     <div class="deck-grid">
@@ -434,10 +444,11 @@
             <button id="rcRecommendBtn" type="button" class="secondary small">📐 대본 보고 추천</button>
             <button id="rcGenBtn" class="secondary">렌더 코드 생성</button>
             <button id="rcCopyBtn" class="secondary hidden">📋 복사</button>
+            <button id="rcClearBtn" class="secondary small hidden">🗑 비우기</button>
             <span id="rcRecommend" class="hint"></span>
           </div>
           <textarea id="rcOut" class="logs" style="min-height:140px; margin-top:.5rem; display:none" readonly></textarea>
-          <p class="hint"><b>사용법:</b> ① 대본을 NotebookLM 소스로 추가 → 이 코드를 챗에 붙여넣고 전송 → 슬라이드덱 PDF 다운로드 → ③ 이미지에 순서대로 넣기. (한 번에 ~45장에서 끊기면 청크를 15로)</p>
+          <p class="hint"><b>사용법:</b> ① 대본을 NotebookLM에 <b>소스로 추가</b> → 이 코드를 <b>챗에 붙여넣고 전송</b> → 슬라이드덱 PDF 다운로드 → ③ 이미지에 순서대로. (한 번에 ~45장에서 끊기면 청크 15로)</p>
         </details>
 
         <div style="margin-top:.9rem">
@@ -448,19 +459,6 @@
           <div id="visualList" class="visual-list" style="margin-top:.6rem"></div>
         </div>
       </div>
-
-      <!-- 우: 회사 양식 PPTX 초안 -->
-      <div class="card">
-        <h3><span class="icon-box ib-indigo"><svg class="ic"><use href="#i-building"/></svg></span> 회사 양식 PPTX 초안</h3>
-        <p class="hint">회사 양식 1개(<code>assets/templates/pptx_template.pptx</code>)로 생성 · <b>표지 없이</b> 본문 슬라이드만, ① 대본과 1:1(개수도 대본 분량 40/60장).
-          <br><b>비주얼(삽화·메타포)은 왼쪽 NotebookLM에서 캡처해 같은 번호 슬라이드에 수동으로 얹으세요.</b></p>
-        <label style="margin-top:.2rem">파일 이름 (선택)</label>
-        <input id="pptxTitle" placeholder="예: 새뮤얼슨 경제학 5부">
-        <div class="toolbar" style="margin-top:.6rem">
-          <button id="genPptxBtn">⬇ PPTX 생성·다운로드</button>
-          <span id="pptxStatus" class="hint"></span>
-        </div>
-      </div>
     </div>
     <div class="toolbar"><button id="nextImages2" class="secondary">다음: ③ 이미지 →</button></div>
   </section>
@@ -468,9 +466,13 @@
   <!-- ③ 이미지 (회사 PPTX 초안 또는 NotebookLM 슬라이드 PDF) -->
   <section class="panel hidden" data-panel="images">
     <div class="card">
-      <h3><span class="icon-box ib-teal"><svg class="ic"><use href="#i-image"/></svg></span> 이미지 — 회사 PPTX 초안 / NotebookLM PDF (순서대로) <span class="hint">· 샘플영상(원고확정용)</span></h3>
-      <p class="hint">②에서 만든 <b>회사 PPTX(.pptx)</b> 또는 NotebookLM 슬라이드덱 <b>PDF</b>를 <b>순서대로</b> 넣으세요(자동으로 이미지화). 비주얼원고가 붙기 전 초안으로 음성·자막 샘플을 만들어 <b>원고 확정</b>을 돕는 단계입니다.</p>
+      <h3><span class="icon-box ib-teal"><svg class="ic"><use href="#i-image"/></svg></span> 이미지 — NotebookLM 슬라이드덱 PDF (순서대로) <span class="hint">· 영상·④PPTX의 공통 소스</span></h3>
+      <p class="hint">②에서 만든 NotebookLM 슬라이드덱 <b>PDF</b>를 <b>순서대로</b> 넣으세요(자동으로 이미지화). 이 이미지는 <b>⑤ 영상</b>의 화면이자, <b>④ PPTX</b>가 텍스트를 OCR로 뽑아오는 소스가 됩니다.</p>
       <div id="pdfSlots"></div>
+      <div class="toolbar" style="margin-top:.5rem">
+        <button id="clearImagesBtn" class="secondary small">🗑 전체 이미지 지우기</button>
+        <span class="hint">다른 스타일로 다시 만들려면 먼저 지우고 새 NotebookLM PDF를 순서대로 넣으세요.</span>
+      </div>
       <div id="imgStatus" class="hint" style="margin-top:.5rem"></div>
       <div id="imgPath" class="hint hidden" style="margin-top:.4rem; padding:.4rem .6rem; border:1px solid var(--border); border-radius:6px; font-family:ui-monospace,Consolas,monospace; word-break:break-all; background:var(--panel2)"></div>
       <div id="thumbs" class="thumbs" style="margin-top:.8rem"></div>
@@ -481,7 +483,44 @@
       <p class="hint">이미지를 넣었으면 여기서 다시 <b>저장</b>(덮어쓰기) — 대본만 저장했던 번들에 이미지가 합쳐집니다. chapter·제목·출력폴더는 ① 대본 하단에서 설정해요.</p>
       <div class="toolbar"><button id="saveBtn2">💾 번들 저장</button><span id="saveStatus2" class="hint"></span></div>
     </div>
-    <div class="toolbar"><button id="nextAudio" class="secondary">다음: ③ 음성/자막 →</button></div>
+    <div class="card block block-lime">
+      <h3>여기서 두 갈래 — 산물 선택</h3>
+      <p class="hint"><b>갈래 1 · 교육영상(교수자 슬라이드 지원)</b>: ④에서 이미지 텍스트를 OCR해 회사 PPTX(교수자 슬라이드)를 만들고 끝. 실제 교육영상은 <b>REC 메이커</b>가 제작 — 여기선 <b>슬라이드 지원까지만</b>.
+        <br><b>갈래 2 · 일반영상</b>: ⑤ 음성/자막 → ⑥ 영상으로 NotebookLM 이미지를 바로 일반영상으로 (이 도구에서 완성).</p>
+      <div class="toolbar" style="margin-top:.3rem">
+        <button id="nextPptx">④ 교육영상용 PPTX (교수자 슬라이드) →</button>
+        <button id="nextAudioFromImg" class="secondary">⑤ 일반영상 만들기 (음성/자막 → 영상) →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ④ PPTX (③ 이미지의 텍스트를 OCR → 회사 양식) -->
+  <section class="panel hidden" data-panel="pptx">
+    <div class="card block block-lime">
+      <h3>④ 교육영상용 PPTX (교수자 슬라이드) — ③ 이미지에서 텍스트 OCR</h3>
+      <p class="hint">교육영상은 <b>교수자 슬라이드(PPTX) 지원까지</b>가 이 도구의 역할 — 실제 영상은 REC 메이커가 만듭니다.
+        <br>③에 넣은 <b>NotebookLM 슬라이드 이미지</b>의 박힌 글자(복사가 안 됨)를 <b>OCR로 추출</b>해 회사 양식(<code>assets/templates/pptx_template.pptx</code>)에 <b>우리 폰트</b>로 채웁니다.
+        그림은 안 넣어요 — <b>이미지는 직접 붙여</b> 배치하세요. 첫 줄=제목, 나머지=본문(제목 구분이 틀리면 PPTX에서 옮기면 됩니다).</p>
+    </div>
+    <div class="card">
+      <h3><span class="icon-box ib-indigo"><svg class="ic"><use href="#i-building"/></svg></span> PPTX 생성</h3>
+      <label style="margin-top:.2rem">파일 이름 (선택)</label>
+      <input id="pptxTitle" placeholder="예: 새뮤얼슨 경제학 5부">
+      <div class="toolbar" style="margin-top:.6rem">
+        <button id="genPptxOcrBtn">⬇ ③ 이미지 OCR → PPTX 생성·다운로드</button>
+        <button id="openPptxFolderBtn" class="secondary">📂 PPTX 폴더 열기</button>
+        <span id="pptxStatus" class="hint"></span>
+      </div>
+      <details style="margin-top:.7rem">
+        <summary class="hint">대안 — OCR 없이 ① 대본 텍스트로 PPTX 생성</summary>
+        <p class="hint" style="margin:.4rem 0">NotebookLM이 다듬은 문구가 아니라 ① 대본의 화면 텍스트로 만듭니다.</p>
+        <div class="toolbar"><button id="genPptxBtn" class="secondary">⬇ 대본 텍스트로 PPTX 생성</button></div>
+      </details>
+      <p class="hint" style="margin-top:.6rem">※ OCR 엔진: Windows는 내장(추가 설치 0) · mac/linux는 Tesseract(kor) 또는 EasyOCR 필요.</p>
+    </div>
+    <div class="card">
+      <p class="hint" style="margin:0">🏁 <b>교육영상은 여기까지(슬라이드 지원)</b> — 완성 PPTX(교수자 슬라이드)를 <b>REC 메이커</b>에 넘기면 거기서 교육영상이 만들어집니다. (일반영상이 필요하면 ③ 이미지에서 <b>⑤ 일반영상</b>으로)</p>
+    </div>
   </section>
 
   <!-- ③ 음성/자막 -->
@@ -538,10 +577,8 @@
             <option value="1920x1080">1920x1080</option>
           </select></div>
       </div>
-      <label class="toolbar" style="margin-top:.7rem; cursor:pointer">
-        <input type="checkbox" id="noSubtitles" style="width:auto">
-        <span>자막 굽지 않기 (유튜브용 <b>클린 영상</b> + <code>.srt</code> 별도) — <code>chNN_final_nosub.mp4</code>. (<b>기본: 자막 구운 <code>chNN_final.mp4</code></b> · 체크하면 클린본)</span>
-      </label>
+      <p class="hint" style="margin-top:.7rem; padding:.5rem .7rem; border:1px solid var(--border); border-radius:8px; background:var(--panel2)">
+        🎬 <b>자막을 굽지 않는 클린 영상으로 통일</b> — <code>chNN_final.mp4</code>(자막 없음) + 별도 <code>chNN.srt</code>. 유튜브엔 영상 올리고 자막은 따로 업로드(아래 안내).</p>
       <div class="toolbar" style="margin-top:.6rem">
         <button id="dryRunBtn" class="secondary">🔍 검증만 (dry-run)</button>
         <button id="renderBtn">🎬 풀 렌더</button>
@@ -553,7 +590,7 @@
       <h3 style="margin-top:1rem">진행 로그</h3>
       <div id="renderLogs" class="logs" style="min-height:120px"></div>
       <video id="player" class="hidden" controls style="width:100%; margin-top:.8rem; border:1px solid var(--border); border-radius:8px; background:#000"></video>
-      <p class="hint" style="margin-top:.6rem">자막 굽지 않기 = 유튜브에 깨끗한 영상 올리고, 같은 폴더의 <code>.srt</code>를 유튜브 자막으로 따로 업로드하세요.</p>
+      <p class="hint" style="margin-top:.6rem"><b>유튜브 자막 올리는 법</b>(일반영상): 클린 <code>nosub.mp4</code>를 업로드 → YouTube Studio → 해당 영상 → <b>자막(Subtitles)</b> → 언어(한국어) → <b>추가 → 파일 업로드 → ‘타임코드 포함’</b> → 같은 폴더의 <code>chNN.srt</code> 선택 → 게시. (교육영상은 교수자가 추가 작업)</p>
     </div>
 
     <div class="card">

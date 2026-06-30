@@ -29,6 +29,8 @@ mp4maker/
 _context/
 _assets/
 ._assets/
+_outputs/
+_output/
 logs/
 *.log
 *.db

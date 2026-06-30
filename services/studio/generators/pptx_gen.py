@@ -23,10 +23,15 @@ from . import md_gen
 # 폰트 상한(pt) — 회사 '보고서' 양식 폰트가 슬라이드엔 작을 수 있어, 16:9 교육 슬라이드에
 # 맞춰 키운 값으로 덮는다. auto_size(TEXT_TO_FIT_SHAPE)와 함께 동작하므로 글이 많으면
 # 자동 축소되고, 적으면 이 상한까지 커진다. (마스터 변경 없이 코드에서 슬라이드용으로 보정)
-_TITLE_PT = 30
+_TITLE_PT = 32
 _SUBTITLE_PT = 22
-_BODY_PT = 18
+_BODY_PT = 20
 _COVER_TITLE_PT = 40
+
+# 폰트(이 PC에 설치돼 있어야 함 — Google Fonts). 제목=Black Han Sans(굵은 디스플레이),
+# 본문=Do Hyeon. 한글은 EA(동아시아) 슬롯에도 같은 폰트를 박아야 적용된다.
+_TITLE_FONT = "Black Han Sans"
+_BODY_FONT = "Do Hyeon"
 
 
 def _coerce_slides(payload: Any) -> Dict:
@@ -188,7 +193,31 @@ def render(payload: Any, out_path: str, template: Optional[str] = None,
 
 
 # ── 채우기 헬퍼 ──────────────────────────────────────────────────────
-def _set_text(ph, lines: List[str], size_pt: int, bold: bool = False) -> None:
+def _apply_font_name(run, name: str) -> None:
+    """run 의 라틴/동아시아(EA)/기타 글꼴을 모두 name 으로 — 한글은 EA 슬롯이 적용됨."""
+    from pptx.oxml.ns import qn
+    run.font.name = name  # latin
+    rPr = run._r.get_or_add_rPr()
+    for tag in ("a:ea", "a:cs"):
+        el = rPr.find(qn(tag))
+        if el is None:
+            el = rPr.makeelement(qn(tag), {})
+            rPr.append(el)
+        el.set("typeface", name)
+
+
+def _no_bullet(p) -> None:
+    """문단의 불릿(점·번호)을 제거 → a:buNone."""
+    from pptx.oxml.ns import qn
+    pPr = p._p.get_or_add_pPr()
+    for tag in ("a:buChar", "a:buAutoNum", "a:buNone"):
+        for el in pPr.findall(qn(tag)):
+            pPr.remove(el)
+    pPr.append(pPr.makeelement(qn("a:buNone"), {}))
+
+
+def _set_text(ph, lines: List[str], size_pt: int, bold: bool = False,
+              font_name: Optional[str] = None, no_bullet: bool = False) -> None:
     from pptx.util import Pt
     from pptx.enum.text import MSO_AUTO_SIZE
     tf = ph.text_frame
@@ -202,10 +231,14 @@ def _set_text(ph, lines: List[str], size_pt: int, bold: bool = False) -> None:
     for i, ln in enumerate(lines):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.text = str(ln)
+        if no_bullet:
+            _no_bullet(p)
         for run in p.runs:
             run.font.size = Pt(size_pt)
             if bold:
                 run.font.bold = True
+            if font_name:
+                _apply_font_name(run, font_name)
         if not p.runs:  # 빈 줄도 폰트 지정
             p.font.size = Pt(size_pt)
 
@@ -226,7 +259,7 @@ def _fill_cover(slide, title: str, subtitle: str) -> None:
     if title_ph is None:
         title_ph = next((p for p in slide.placeholders), None)
     if title_ph is not None:
-        _set_text(title_ph, _wrap(title), _COVER_TITLE_PT, bold=True)
+        _set_text(title_ph, _wrap(title), _COVER_TITLE_PT, bold=True, font_name=_TITLE_FONT)
         used.add(title_ph.placeholder_format.idx)
     # 부제: SUBTITLE 우선, 없으면 가장 큰 BODY
     sub_ph = next((p for p in slide.placeholders if _is_type(p, S)), None)
@@ -235,17 +268,18 @@ def _fill_cover(slide, title: str, subtitle: str) -> None:
                   if _is_type(p, B) and p.placeholder_format.idx not in used]
         sub_ph = max(bodies, key=_area) if bodies else None
     if sub_ph is not None and subtitle:
-        _set_text(sub_ph, _wrap(subtitle), _SUBTITLE_PT)
+        _set_text(sub_ph, _wrap(subtitle), _SUBTITLE_PT, font_name=_BODY_FONT)
         used.add(sub_ph.placeholder_format.idx)
     _clear_unused(slide, used, SKIP)
 
 
-def _fill_body(slide, title: str, bullets: List[str]) -> None:
+def _fill_body(slide, title: str, bullets: List[str],
+               title_pt: int = _TITLE_PT, body_pt: int = _BODY_PT) -> None:
     T, S, B, SKIP = _ph_types()
     used = set()
     title_ph = next((p for p in slide.placeholders if _is_type(p, T)), None)
     if title_ph is not None:
-        _set_text(title_ph, _wrap(title), _TITLE_PT, bold=True)
+        _set_text(title_ph, _wrap(title), title_pt, bold=True, font_name=_TITLE_FONT)
         used.add(title_ph.placeholder_format.idx)
     # 본문: 가장 큰 BODY/OBJECT placeholder
     bodies = [p for p in slide.placeholders if _is_type(p, B)]
@@ -255,7 +289,7 @@ def _fill_body(slide, title: str, bullets: List[str]) -> None:
                         if p.placeholder_format.idx not in used and p.has_text_frame), None)
     if body_ph is not None:
         lines = [str(b) for b in (bullets or [])][:8] or [""]
-        _set_text(body_ph, lines, _BODY_PT)
+        _set_text(body_ph, lines, body_pt, font_name=_BODY_FONT, no_bullet=True)
         used.add(body_ph.placeholder_format.idx)
     _clear_unused(slide, used, SKIP)
 

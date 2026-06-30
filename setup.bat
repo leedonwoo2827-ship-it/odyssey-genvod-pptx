@@ -49,7 +49,7 @@ where codex >nul 2>nul && (echo       [OK] codex installed) || (echo       [note
 echo step:codex-done >> "%LOG%"
 
 REM 5) local TTS model download (HuggingFace, ~380MB) - only if missing
-echo [5/6] checking TTS model (assets\onnx)...
+echo [5/7] checking TTS model (assets\onnx)...
 if exist "assets\onnx\vocoder.onnx" (
   echo       [OK] TTS model present
 ) else (
@@ -59,13 +59,18 @@ if exist "assets\onnx\vocoder.onnx" (
 echo step:models-done >> "%LOG%"
 
 REM 6) mp4maker checkout + probe, prepare .env
-echo [6/6] mp4maker checkout + probe...
+echo [6/7] mp4maker checkout + probe...
 if not exist "mp4maker\mp4maker" git clone --depth 1 https://github.com/leedonwoo2827-ship-it/mp4maker.git mp4maker
 if not exist .env copy .env.example .env >nul
 pushd mp4maker
 "%VPY%" -m mp4maker --probe
 popd
 echo step:mp4maker-done >> "%LOG%"
+
+REM 7) install PPTX fonts (Black Han Sans / Do Hyeon) for current user - no admin
+echo [7/7] installing PPTX fonts (assets\fonts)...
+"%VPY%" scripts\install_fonts.py
+echo step:fonts-done >> "%LOG%"
 
 echo.
 echo ============================================================

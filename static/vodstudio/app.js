@@ -35,7 +35,7 @@ function markDone(tab) {
   renderHero();
 }
 // 인앱 히어로 '실데이터 프리뷰' — 의존성 0 인라인 SVG (분량 도넛 + 단계 진행바)
-const HERO_STEPS = [["script","대본"],["deck","제작"],["images","이미지"],["audio","음성"],["video","영상"]];
+const HERO_STEPS = [["script","대본"],["deck","비주얼"],["images","이미지"],["pptx","PPTX"],["audio","음성"],["video","영상"]];
 function renderHero() {
   const host = $("heroPreview"); if (!host) return;
   const total = parseInt(($("gTotal") && $("gTotal").value) || "0", 10) || 0;
@@ -129,12 +129,37 @@ async function initDeck() {
       `<option value="${s.id}">${esc(s.name)}${s.recommended ? " ★" : ""}</option>`).join("");
     const def = VISUAL_STYLES.find(s => s.default) || VISUAL_STYLES[0];
     if (def) sel.value = String(def.id);   // 기본: 플랫 벡터(경제학 교재 추천)
-    const box = $("visualIntensity");
-    box.innerHTML = (d.intensities || []).map(it =>
-      `<label class="radio" style="margin:0 .6rem 0 0"><input type="radio" name="vintensity" value="${it.id}"${it.id === "medium" ? " checked" : ""}> ${esc(it.label)}</label>`).join("");
+    renderStylePills();      // 버튼식 스타일 선택 렌더
     fillDesignFromStyle();   // 선택 스타일 → NotebookLM 렌더코드 디자인 시스템 자동 채움
     DECK_READY = true;
   } catch (e) { $("visualStatus").textContent = "스타일 목록 로드 실패: " + e.message; }
+}
+// 스타일 = 버튼(pill)식 선택 + '테스트 완료' 표시(localStorage 영구 저장)
+const TESTED_KEY = "vod_tested_styles";
+function getTested() { try { return JSON.parse(localStorage.getItem(TESTED_KEY) || "[]"); } catch (e) { return []; } }
+function setTested(a) { try { localStorage.setItem(TESTED_KEY, JSON.stringify(a)); } catch (e) {} }
+function renderStylePills() {
+  const mount = $("visualStylePills"), sel = $("visualStyle");
+  if (!mount || !sel) return;
+  const cur = sel.value, tested = getTested();
+  mount.innerHTML = VISUAL_STYLES.map(s => {
+    const on = String(s.id) === String(cur);
+    const ok = tested.includes(s.id) ? " ✓" : "";
+    return `<button type="button" class="vpill${on ? " active" : ""}" data-val="${s.id}">${esc(s.name)}${s.recommended ? " ★" : ""}${ok}</button>`;
+  }).join("");
+  mount.querySelectorAll(".vpill").forEach(b => b.addEventListener("click", () => {
+    sel.value = b.dataset.val; renderStylePills(); fillDesignFromStyle();
+  }));
+}
+function markStyleTested(done) {
+  const sel = $("visualStyle"); if (!sel) return;
+  const id = parseInt(sel.value, 10);
+  const st = VISUAL_STYLES.find(s => s.id === id);
+  let arr = getTested();
+  if (done) { if (!arr.includes(id)) arr.push(id); } else { arr = arr.filter(x => x !== id); }
+  setTested(arr); renderStylePills();
+  if ($("styleTestedStatus")) $("styleTestedStatus").textContent =
+    `${st ? st.name : ""} ${done ? "→ 테스트 완료 ✓" : "→ 표시 해제"} (완료 ${arr.length}개)`;
 }
 // 공유 스타일 선택 → 렌더코드 '디자인 시스템' 텍스트를 카탈로그에서 채운다(편집 가능).
 function fillDesignFromStyle() {
@@ -143,6 +168,9 @@ function fillDesignFromStyle() {
   if (!st) return;
   if ($("designSystem")) $("designSystem").value = st.design_system || "";
   if ($("designName")) $("designName").value = st.name || "";
+  // 이미 렌더 코드가 떠 있으면 새 스타일로 즉시 다시 생성(기존 코드 교체) — 스타일 변경이 바로 반영됨
+  const out = $("rcOut");
+  if (out && out.style.display !== "none" && out.value.trim()) genRenderCode();
 }
 function _deckScript() {
   const t = ($("manualScript") && $("manualScript").value || "").trim();
@@ -189,8 +217,33 @@ async function genPptx() {
     a.download = (title || "회사양식_PPTX초안") + ".pptx";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    $("pptxStatus").textContent = "다운로드 완료 — ③ 이미지 단계에서 이 PPTX로 샘플영상을 만들 수 있어요.";
-    markDone("deck");
+    $("pptxStatus").textContent = "다운로드 완료 (대본 텍스트 기반).";
+    markDone("pptx");
+  } catch (e) { $("pptxStatus").textContent = "실패: " + e.message; }
+}
+
+// ④ ③ 이미지의 텍스트를 OCR해서 회사 양식 PPTX 생성(우리 폰트). 그림은 직접 삽입.
+async function genPptxOcr() {
+  if (!JOB) { alert("먼저 ③ 이미지에서 번들을 저장하세요. (저장된 이미지에서 OCR합니다)"); showTab("images"); return; }
+  $("pptxStatus").textContent = "③ 이미지 OCR → PPTX 생성 중… (이미지가 많으면 잠시 걸려요)";
+  try {
+    const title = ($("pptxTitle") && $("pptxTitle").value.trim()) || "";
+    const res = await fetch(API + `/jobs/${JOB}/pptx-ocr`, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) { let d = null; try { d = await res.json(); } catch (e) {} throw new Error((d && d.detail) || `HTTP ${res.status}`); }
+    let savedPath = res.headers.get("X-Saved-Path") || "";
+    try { savedPath = decodeURIComponent(savedPath); } catch (e) {}
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (title || "회사양식_PPTX초안_OCR") + ".pptx";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    $("pptxStatus").textContent = "다운로드 완료" + (savedPath ? ` · 번들에도 저장: ${savedPath}` : "") + " — 그림은 직접 붙이고, 제목이 본문에 섞였으면 옮기세요.";
+    markDone("pptx");
   } catch (e) { $("pptxStatus").textContent = "실패: " + e.message; }
 }
 
@@ -235,11 +288,17 @@ function renderSourceOptions(d) {
   const wrap = $("srcOptions"); if (!wrap) return;
   const fmt = n => Math.round(n).toLocaleString();
   const src = d.source_chars || 0;
-  const MIN_TARGETS = [5, 10, 15, 30], CPS_SAFE = 7.0, MAX_IMAGES = 40;
-  const opts = MIN_TARGETS.map((m, i) => {
-    const narr = Math.round(m * 60 * CPS_SAFE);
-    const images = Math.max(1, Math.min(m * 2, MAX_IMAGES));
-    return { idx: i + 1, minutes: m, narr, images, pct: src ? Math.round(narr / src * 100) : 0 };
+  const CPS_SAFE = 7.0;
+  const PRESETS = [
+    { minutes: 10, images: 20 },
+    { minutes: 15, images: 30 },
+    { minutes: 20, images: 40 },
+    { minutes: 25, images: 50 },
+    { minutes: 30, images: 60 },
+  ];
+  const opts = PRESETS.map((p, i) => {
+    const narr = Math.round(p.minutes * 60 * CPS_SAFE);
+    return { idx: i + 1, minutes: p.minutes, narr, images: p.images, pct: src ? Math.round(narr / src * 100) : 0 };
   });
   const cols = "grid-template-columns:1.0fr .8fr 1.0fr .8fr .9fr;gap:.5rem";
   const header = `<div style="display:grid;${cols};align-items:center;padding:.25rem .8rem;color:#6b7280;font-size:.78rem">
@@ -398,63 +457,6 @@ async function reviseScript() {
   finally { btn.disabled = false; }
 }
 
-// ✨ 자동 정리 하네스 — 검수→수정→재검수를 🔴/🟡이 사라질 때까지 반복(최대 MAX회)
-function reviewBlock(report, startEmoji, ends) {
-  const s = (report || "").indexOf(startEmoji);
-  if (s < 0) return "";
-  let e = report.length;
-  for (const em of ends.concat(["한 줄", "총평"])) {
-    const i = report.indexOf(em, s + startEmoji.length);
-    if (i >= 0 && i < e) e = i;
-  }
-  return report.slice(s, e);
-}
-function countIssues(report) {
-  // 지적 항목은 항상 "슬라이드 N"을 참조 — 블록 내 '슬라이드' 등장수 ≈ 지적 건수
-  const c = s => (s.match(/슬라이드/g) || []).length;
-  const red = c(reviewBlock(report, "🔴", ["🟡", "🟢"]));
-  const yel = c(reviewBlock(report, "🟡", ["🟢"]));
-  return { red, yel, any: red + yel > 0 };
-}
-// ✨ 자동 정리: 한 번 누르면 검수→수정을 몇 번 다듬는다. 끝까지 강제로 돌리지 않고,
-// 깨끗해지면 멈추고, 남았으면 "다시 누르면 계속"하게 둔다(없어질 때까지/간단한 것만 남을 때까지).
-// 과도한 연속 재작성은 오탈자를 부르므로 한 번에 도는 횟수는 짧게 잡는다.
-async function autoReview() {
-  if (!ragIndexed || !JOB) { alert("자동 정리는 RAG 근거가 필요합니다. 먼저 📚 자료 학습을 누르세요."); return; }
-  if (!$("manualScript").value.trim()) { alert("대본이 없습니다."); return; }
-  const ROUNDS = 2;   // 한 번 누를 때 다듬는 횟수(부족하면 사용자가 다시 누름)
-  const btn = $("autoReviewBtn"); btn.disabled = true;
-  $("reviewBox").classList.remove("hidden"); $("reviewBox").open = true;
-  let first = null, last = null;
-  const review = async () => {
-    const rv = await api(`/jobs/${JOB}/review-script`, { method: "POST", body: JSON.stringify({ script_text: $("manualScript").value }) });
-    const report = rv.report || ""; $("reviewOut").textContent = report; return report;
-  };
-  try {
-    for (let r = 1; r <= ROUNDS; r++) {
-      $("copyScriptStatus").textContent = "✨ 자동 정리 — 검수 중…";
-      const report = await review();
-      last = countIssues(report); if (r === 1) first = last;
-      if (!last.any) break;   // 깨끗 → 멈춤
-      $("copyScriptStatus").textContent = "✨ 자동 정리 — 수정 반영 중… (잠시 걸려요)";
-      const d = await api(`/jobs/${JOB}/revise-script`, { method: "POST", body: JSON.stringify({ script_text: $("manualScript").value, review_report: report }) });
-      if (d.script) $("manualScript").value = d.script;
-    }
-    if (last && last.any) {   // 마지막에 수정했으면 현재 상태를 한 번 더 확인
-      $("copyScriptStatus").textContent = "✨ 자동 정리 — 재검수 중…";
-      last = countIssues(await review());
-    }
-    if (last && !last.any) {
-      $("copyScriptStatus").textContent = first && (first.red + first.yel)
-        ? `✓ 정리됨 — 처음 🔴${first.red}·🟡${first.yel}건 있었는데 지금 없음. 📋 복사 → NotebookLM.`
-        : "✓ 검수 통과 — 🔴/🟡 없음. 바로 진행하세요.";
-    } else {
-      $("copyScriptStatus").textContent = `처음 🔴${first.red}·🟡${first.yel} → 지금 🔴${last.red}·🟡${last.yel}. 남았으면 ✨ 다시 눌러 계속 정리하세요 (없어지거나 간단한 것만 남을 때까지).`;
-    }
-  } catch (e) { $("copyScriptStatus").textContent = "자동 정리 실패: " + e.message; }
-  finally { btn.disabled = false; }
-}
-
 // 📺 유튜브 메타 생성
 async function ytMeta() {
   const text = $("manualScript").value.trim();
@@ -493,25 +495,26 @@ async function openDraftFolder() {
 // NotebookLM 렌더 코드
 function buildRenderCode(total, chunk, design) {
   const n = Math.ceil(total / chunk);
-  // 디자인은 '독립 [Global Design System] 블록'으로 두면 NotebookLM 안전필터가 거부한다.
-  // → 각 함수의 user_steering_prompt 안에 자연스러운 스타일 규칙으로 녹여 넣어 일관성을 유지한다.
+  // 순화 'BATCH' 포맷 — 사용자 NotebookLM에서 통과 확인(2026-06-30). 위협적 [SYSTEM KERNEL OVERRIDE]
+  // 헤더는 가드레일에 거절당해 제거. 디자인 전체는 BATCH 1에만, 이후는 'Batch 1과 동일' 참조(같은 메시지라 문맥 유지).
   const designLine = (design || "").trim().replace(/\s*\n\s*/g, " ");
   let fns = "";
   for (let i = 0; i < n; i++) {
     const s = i * chunk + 1, e = Math.min((i + 1) * chunk, total);
     const first = i === 0, last = i === n - 1;
     const r = [];
-    r.push("Match the source content 1:1.");
-    r.push(`Show a small page number on EVERY slide in the SAME fixed position — bottom-LEFT corner (opposite the NotebookLM logo), small gray text, identical size and placement on all slides (do not vary size or position). Number consecutively starting from ${s} for this part, so the full deck reads 1…${total} in order. This keeps slide order visible regardless of file name.`);
-    if (designLine) r.push(`Keep a consistent visual style on every slide — ${designLine}`);
-    if (!first) r.push(`Do NOT make a cover/title slide; start immediately with slide ${s} body content.`);
+    r.push("Match the source content 1:1 (one deck slide per source slide; do not reduce the count).");
+    if (designLine) r.push(first
+      ? `Consistent visual style on every slide — ${designLine}`
+      : "Keep the EXACT SAME visual style as Batch 1 (same technique, palette, plain white background, no decorative scatter).");
+    if (!first) r.push(`No cover/title slide; start immediately with slide ${s} body content.`);
     r.push(last
       ? `Place the only ending/closing slide at slide ${e}.`
-      : `Do NOT make any ending/thank-you slide at slide ${e}; end with body content.`);
-    const rules = r.map((x, j) => `    ${j + 1}. ${x}`).join("\n");
-    fns += `FUNCTION_${String(i + 1).padStart(2, "0")}_CALL_STUDIO() {\n  target_data: "Source Script Slides ${s} to ${e}"\n  deck_type: "presentation"\n  length: "dynamic"\n  user_steering_prompt: "\n${rules}\n  "\n}\n\n`;
+      : "No ending/thank-you slide; end with body content.");
+    const rules = r.map((x, j) => `  ${j + 1}. ${x}`).join("\n");
+    fns += `BATCH ${i + 1} — source script slides ${s} to ${e} (deck_type: presentation, length: dynamic):\n${rules}\n\n`;
   }
-  return `[SYSTEM KERNEL OVERRIDE]\nRole: API Execution Terminal\nTask: Execute the following algorithmic sequence STRICTLY. Do not summarize, do not combine, do not output conversational text.\n\n## EXECUTION_SCRIPT_RUN()\nWARNING: Merging ${total} slides into a single API call causes a FATAL_MEMORY_CRASH. You MUST execute the ${n} functions below sequentially and independently.\n\n${fns}`;
+  return `Build a slide deck from the source script. Process it in independent batches so NO slides are dropped, merged, or summarized — keep every slide.\n\n${fns}`.trimEnd() + "\n";
 }
 function genRenderCode() {
   const total = parseInt($("rcTotal").value, 10) || 60;
@@ -520,6 +523,13 @@ function genRenderCode() {
   $("rcOut").value = buildRenderCode(total, chunk, design);
   $("rcOut").style.display = "block";
   $("rcCopyBtn").classList.remove("hidden");
+  if ($("rcClearBtn")) $("rcClearBtn").classList.remove("hidden");
+}
+// 🗑 렌더 코드 비우기 — 출력 창을 지우고 숨긴다(스타일 비교 테스트 시 깔끔하게)
+function clearRenderCode() {
+  const out = $("rcOut"); if (out) { out.value = ""; out.style.display = "none"; }
+  if ($("rcCopyBtn")) $("rcCopyBtn").classList.add("hidden");
+  if ($("rcClearBtn")) $("rcClearBtn").classList.add("hidden");
 }
 
 // 📐 대본을 보고 슬라이드 수 감지 → 청크 추천 (~10개 청크가 일관성에 유리)
@@ -685,6 +695,15 @@ async function makeImages() {
     $("imgStatus").textContent = "오류: " + e.message;
   }
 }
+// 🗑 전체 이미지 지우기 — 회사 PPTX판 → NotebookLM판 일괄 교체용. 화면/슬롯을 비우고
+// NotebookLM PDF를 다시 넣어 재생성하게 한다. (저장 번들은 이후 '번들 저장' 시 교체됨)
+function clearAllImages() {
+  if (!confirm("현재 이미지(씬 전체)를 비웁니다.\n위에 NotebookLM PDF를 순서대로 다시 넣으면 그걸로 재생성됩니다.\n(저장된 번들 이미지는 다시 '번들 저장' 할 때 교체돼요)\n\n계속할까요?")) return;
+  buildSlots();                       // 슬롯 파일 입력 초기화
+  if ($("thumbs")) $("thumbs").innerHTML = "";
+  if ($("imgPath")) $("imgPath").classList.add("hidden");
+  $("imgStatus").textContent = "이미지 비움 — 위 슬롯에 NotebookLM 슬라이드덱 PDF를 순서대로 넣어 재생성하세요.";
+}
 
 // ================= ③ 저장 + 음성/자막 =================
 async function ensureJob() {
@@ -759,6 +778,32 @@ async function saveFromAudio() {
 
 // ---- 기존 번들 불러오기 (재시작 후 작업 이어가기) ----
 let BUNDLES = [];
+// 번들 수정시각(epoch초) → "MM-DD HH:mm" 표시(어느 번들이 최신인지 구분용)
+function fmtTime(epochSec) {
+  try {
+    const d = new Date(epochSec * 1000);
+    const p = n => String(n).padStart(2, "0");
+    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  } catch (e) { return ""; }
+}
+// 번들 행에 산물별 저장 체크 배지 — 씬 수 대비 충족이면 초록 ✓, 일부면 노랑, 없으면 회색.
+function bundleChips(b) {
+  const n = b.scenes || 0;
+  const chip = (label, count, isFlag) => {
+    let ok, txt;
+    if (isFlag) { ok = count ? 2 : 0; txt = count ? "✓" : "✗"; }
+    else if (n > 0) { ok = count >= n ? 2 : (count > 0 ? 1 : 0); txt = `${count}/${n}`; }
+    else { ok = count > 0 ? 2 : 0; txt = count > 0 ? String(count) : "✗"; }
+    const color = ok === 2 ? "var(--accent2,#16a34a)" : ok === 1 ? "#b45309" : "#9ca3af";
+    const mark = ok === 2 ? "✓ " : "";
+    return `<span style="display:inline-block;margin:.1rem .3rem .1rem 0;padding:.05rem .4rem;border-radius:999px;border:1px solid var(--border);font-size:.72rem;color:${color}">${mark}${label} ${txt}</span>`;
+  };
+  return chip("대본", b.has_script, true)
+    + chip("이미지", b.images || 0)
+    + chip("음성", b.audio || 0)
+    + chip("자막", b.subtitles || 0)
+    + chip("영상", b.has_render, true);
+}
 async function refreshBundles() {
   const host = $("bundleList"); if (!host) return;
   const root = ($("outputDir") && $("outputDir").value.trim()) || "";
@@ -770,7 +815,8 @@ async function refreshBundles() {
       host.innerHTML = `<div class="empty">번들 없음 — 출력 폴더 경로 확인 후 🔄 (또는 아래 경로 직접 입력)</div>`;
     } else {
       host.innerHTML = BUNDLES.map((b, i) => `<div class="brow" data-i="${i}">
-        <div class="bname"><b>${esc(b.name)}</b><span class="bmeta"> · ${esc(b.title || "")} · 씬${b.scenes}${b.has_render ? " · 렌더됨" : ""}</span></div>
+        <div class="bname"><b>${esc(b.name)}</b><span class="bmeta"> · ${esc(b.title || "")} · 씬${b.scenes}${b.mtime ? " · " + fmtTime(b.mtime) : ""}${i === 0 ? " · 최신" : ""}</span>
+          <div class="bstatus">${bundleChips(b)}</div></div>
         <button class="bload secondary small" type="button">불러오기</button>
         <button class="bdel" type="button" title="삭제">🗑</button>
       </div>`).join("");
@@ -793,27 +839,76 @@ async function deleteBundle(dir, name) {
   } catch (e) { $("loadStatus").textContent = "삭제 실패: " + e.message; }
 }
 function fillScriptFromScenes(scenes) {
-  // 번들 대본(JSON)에서 ① 대본 텍스트 복원
-  const txt = (scenes || []).map(s =>
-    `**슬라이드 ${s.scene}**\n제목: ${s.title || ""}\n상세 대본: ${s.narration_text || ""}`).join("\n\n");
+  // 번들 대본(JSON)에서 ① 대본 텍스트 복원 — 화면 텍스트(슬라이드 본문)도 포함해야
+  // 회사 PPTX 본문이 채워진다.
+  const txt = (scenes || []).map(s => {
+    let block = `**슬라이드 ${s.scene}**\n제목: ${s.title || ""}`;
+    if ((s.screen_text || "").trim()) block += `\n화면 텍스트:\n${s.screen_text}`;
+    block += `\n상세 대본: ${s.narration_text || ""}`;
+    return block;
+  }).join("\n\n");
   if (txt.trim()) $("manualScript").value = txt;
 }
+let CUR_BUNDLE_DIR = "";   // 현재 불러온 번들 경로(씬 삽입 후 리로드용)
+// ⎘ 씬 삽입(복사) — after 씬 뒤에 새 씬 추가 → 번들 다시 불러와 갱신
+async function insertScene(after) {
+  if (!JOB) { alert("먼저 번들을 불러오세요."); return; }
+  if (!confirm(`씬 ${after} 뒤에 새 씬을 추가합니다(이 씬을 복제).\n이후 씬 번호·이미지·음성·자막이 한 칸씩 밀립니다. 진행할까요?`)) return;
+  try {
+    const d = await api(`/jobs/${JOB}/insert-scene`, { method: "POST", body: JSON.stringify({ after_scene: after, copy: true }) });
+    $("imgStatus").textContent = `✓ 씬 ${d.inserted_at} 추가됨 (총 ${d.total}) — 새 씬 이미지는 '🖼 교체'로 넣으세요.`;
+    if (CUR_BUNDLE_DIR) await loadBundleByDir(CUR_BUNDLE_DIR);
+  } catch (e) { alert("씬 삽입 실패: " + e.message); }
+}
+// 이미지 클릭 시 크게 보기(라이트박스). 한 번만 생성해 재사용.
+function openLightbox(src) {
+  let ov = document.getElementById("imgLightbox");
+  if (!ov) {
+    ov = document.createElement("div"); ov.id = "imgLightbox";
+    ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out";
+    ov.innerHTML = `<img style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.5)">`;
+    ov.addEventListener("click", () => { ov.style.display = "none"; });
+    document.body.appendChild(ov);
+  }
+  ov.querySelector("img").src = src;
+  ov.style.display = "flex";
+}
+// ③ 한 씬씩 쭉 — [이미지 좌] + [원래 대본 텍스트 우]. 이미지↔대본 매칭으로 합쳐진 씬을 눈으로 찾는다. 이미지 클릭=확대.
 function renderThumbsFromBundle(scenes) {
   const wrap = $("thumbs"); if (!wrap) return;
-  wrap.innerHTML = "";
+  wrap.innerHTML = ""; wrap.style.cssText = "display:block;margin-top:.8rem";
   (scenes || []).forEach(s => {
-    const el = document.createElement("div"); el.className = "thumb";
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:.9rem;align-items:flex-start;padding:.6rem;border:1px solid var(--border);border-radius:10px;margin-bottom:.55rem;background:var(--panel2)";
+    const imgCol = document.createElement("div");
+    imgCol.style.cssText = "flex:0 0 340px;max-width:340px";
     if (s.has_image && s.image_file) {
-      el.innerHTML = `<img loading="lazy" src="${API}/jobs/${JOB}/file/images/${encodeURIComponent(s.image_file)}?t=${Date.now()}" alt="씬${s.scene}"><div class="cap"><span>씬 ${s.scene}</span><span><button class="repl small secondary" type="button" style="padding:.1rem .4rem;font-size:.72rem">🖼 교체</button> <span class="pill ok">OK</span></span></div>`;
-      const img = el.querySelector("img");
-      el.querySelector(".repl").addEventListener("click", () => replaceSceneImage(s.scene, img));
+      const src = `${API}/jobs/${JOB}/file/images/${encodeURIComponent(s.image_file)}?t=${Date.now()}`;
+      imgCol.innerHTML = `<img loading="lazy" src="${src}" alt="씬${s.scene}" style="width:100%;border:1px solid var(--border);border-radius:8px;cursor:zoom-in">
+        <div style="margin-top:.3rem;display:flex;gap:.35rem;align-items:center;flex-wrap:wrap"><span class="pill">씬 ${s.scene}</span>
+        <button class="repl secondary small" type="button" style="padding:.1rem .4rem;font-size:.72rem">🖼 교체</button>
+        <button class="ins secondary small" type="button" title="이 씬 뒤에 새 씬 복사(이후 한 칸씩 밀림)" style="padding:.1rem .4rem;font-size:.72rem">⎘ 뒤에 복사</button>
+        <span class="hint">클릭=확대</span></div>`;
+      const img = imgCol.querySelector("img");
+      img.addEventListener("click", () => openLightbox(src));
+      imgCol.querySelector(".repl").addEventListener("click", () => replaceSceneImage(s.scene, img));
+      imgCol.querySelector(".ins").addEventListener("click", () => insertScene(s.scene));
     } else {
-      el.innerHTML = `<div class="miss">씬${s.scene} 없음</div>`;
+      imgCol.innerHTML = `<div style="aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;border:1px dashed var(--reject,#dc2626);border-radius:8px;color:var(--reject,#dc2626)">씬 ${s.scene} 이미지 없음</div>`;
     }
-    wrap.appendChild(el);
+    const txtCol = document.createElement("div");
+    txtCol.style.cssText = "flex:1 1 auto;min-width:0";
+    const screen = (s.screen_text || "").trim();
+    const narr = (s.narration_text || "").trim();
+    txtCol.innerHTML = `<div style="font-weight:700;margin-bottom:.35rem">씬 ${s.scene}. ${esc(s.title || "")}</div>`
+      + (screen ? `<div style="white-space:pre-wrap;font-size:.9rem;line-height:1.5">${esc(screen)}</div>` : `<div class="hint">화면 텍스트 없음</div>`)
+      + (narr ? `<details style="margin-top:.4rem"><summary class="hint">상세 대본(자잘한 설명)</summary><div style="white-space:pre-wrap;font-size:.84rem;color:var(--muted);margin-top:.3rem;line-height:1.5">${esc(narr)}</div></details>` : "");
+    row.appendChild(imgCol); row.appendChild(txtCol);
+    wrap.appendChild(row);
   });
   const n = (scenes || []).filter(s => s.has_image).length;
-  $("imgStatus").textContent = `불러온 번들 — 이미지 ${n}/${(scenes || []).length}개`;
+  const total = (scenes || []).length;
+  $("imgStatus").textContent = `불러온 번들 — 이미지 ${n}/${total}개` + (n < total ? ` · ⚠ ${total - n}개 부족` : "");
 }
 // 🖼 씬 이미지 교체 — PNG 업로드로 그 씬 이미지를 덮어쓴다
 function replaceSceneImage(idx, imgEl) {
@@ -834,6 +929,7 @@ function replaceSceneImage(idx, imgEl) {
 async function loadBundleByDir(dir) {
   dir = (dir || "").trim();
   if (!dir) { alert("불러올 번들을 목록에서 고르거나 경로를 입력하세요. (없으면 🔄)"); return; }
+  CUR_BUNDLE_DIR = dir;
   $("loadStatus").textContent = "불러오는 중…";
   try {
     const d = await api("/load-bundle", { method: "POST", body: JSON.stringify({ bundle_dir: dir }) });
@@ -1084,7 +1180,7 @@ async function genAudio() {
 // ---- 전체 보이스 일괄 적용 (③ 상단) ----
 function fillVoiceAll() {
   const sel = $("voiceAll"); if (!sel || sel.options.length) return;
-  sel.innerHTML = voiceSelectHtml("M5"); // 기본 M5 초기 선택
+  sel.innerHTML = voiceSelectHtml("M3"); // 기본 남3·차분(① 기본값과 일치)
   renderVoicePills("voiceAllPills", "voiceAll");
 }
 async function applyVoiceAll() {
@@ -1146,7 +1242,7 @@ async function doRender(dryRun) {
       method: "POST",
       body: JSON.stringify({
         mode: $("renderMode").value, resolution: $("resolution").value,
-        no_subtitles: $("noSubtitles").checked, dry_run: dryRun,
+        no_subtitles: true, dry_run: dryRun,
       }),
     });
     if (renderTimer) clearInterval(renderTimer);
@@ -1428,6 +1524,14 @@ function on(id, ev, fn) { const el = $(id); if (el) el.addEventListener(ev, fn);
 document.querySelectorAll("#stepper .step").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 on("nextImages", "click", () => showTab("deck"));
 on("nextImages2", "click", () => showTab("images"));
+on("nextPptx", "click", () => showTab("pptx"));
+on("nextAudioFromImg", "click", () => showTab("audio"));
+on("genPptxOcrBtn", "click", genPptxOcr);
+on("openPptxFolderBtn", "click", async () => {
+  if (!JOB) { alert("먼저 번들을 불러오세요."); return; }
+  try { const d = await api(`/jobs/${JOB}/open-folder`, { method: "POST", body: JSON.stringify({ sub: "pptx" }) }); $("pptxStatus").textContent = "📂 열림: " + d.opened; }
+  catch (e) { $("pptxStatus").textContent = "폴더 열기 실패: " + e.message; }
+});
 on("genVisualBtn", "click", genVisualPrompts);
 on("genPptxBtn", "click", genPptx);
 on("nextAudio", "click", () => showTab("audio"));
@@ -1438,21 +1542,30 @@ on("ragBtn", "click", ragLearn);
 on("researchBtn", "click", deepResearch);
 on("reviewBtn", "click", reviewScript);
 on("reviseBtn", "click", reviseScript);
-on("autoReviewBtn", "click", autoReview);
 on("ytMetaBtn", "click", ytMeta);
 on("copyScriptBtn", "click", copyScript);
 on("rcGenBtn", "click", genRenderCode);
 on("rcCopyBtn", "click", copyRenderCode);
+on("rcClearBtn", "click", clearRenderCode);
 on("rcRecommendBtn", "click", () => recommendChunking(false));
 on("visualStyle", "change", fillDesignFromStyle);   // 공유 스타일 → 렌더코드 디자인 시스템
+on("styleTestedBtn", "click", () => markStyleTested(true));
+on("styleResetTestedBtn", "click", () => markStyleTested(false));
 on("gTotal", "change", e => { if ($("rcTotal")) $("rcTotal").value = e.target.value; renderHero(); });
 on("heroStart", "click", () => { showTab("script"); const c = document.querySelector('[data-panel="script"] .card'); if (c) c.scrollIntoView({ behavior: "smooth" }); });
+// 출력 폴더 권장 경로 — 복사 / 입력칸에 넣기
+const OUT_DIR_SAMPLE = "D:\\00work\\260629-od-notebooklm-pptslide\\_outputs";
+function _useOutDir() { if ($("outputDir")) { $("outputDir").value = OUT_DIR_SAMPLE; if ($("outDirStatus")) $("outDirStatus").textContent = "✓ 입력칸에 넣었습니다."; } }
+on("outDirCopy", "click", () => copyText(OUT_DIR_SAMPLE, $("outDirStatus"), "✓ 복사됨 — 출력 폴더 칸에 붙여넣기"));
+on("outDirUse", "click", _useOutDir);
+on("outDirSample", "click", _useOutDir);
 on("designSaveBtn", "click", saveDesignPreset);
 on("voicePreviewBtn", "click", previewVoice);
 on("voiceStyle", "change", echoVoice);
 on("bundlesRefresh", "click", refreshBundles);
 on("bundleDirLoadBtn", "click", () => loadBundleByDir($("bundleDirInput").value));
 on("saveBtn", "click", saveBundle);
+on("clearImagesBtn", "click", clearAllImages);
 on("saveBtn2", "click", saveFromImages);
 on("saveBtn3", "click", saveFromAudio);
 on("synthAllBtn", "click", synthAll);
@@ -1482,7 +1595,7 @@ on("llmModel", "change", e => setModel(e.target.value));
 wireSrcDrop();
 buildSlots();
 fillVoiceAll();
-if ($("introVoice")) $("introVoice").innerHTML = voiceSelectHtml("M5");
+if ($("introVoice")) $("introVoice").innerHTML = voiceSelectHtml("M3");
 renderVoicePills("voicePills", "voiceStyle");
 renderVoicePills("audiencePills", "gAudience");     // 타겟 청중 — 버튼형
 renderVoicePills("objectivePills", "gObjective");   // 발표 목적 — 버튼형
@@ -1490,9 +1603,9 @@ loadLlmStatus();
 echoVoice();
 refreshBundles();
 renderHero();
-// 프리셋 로드 + 타겟 복원 후, 청중/목적 버튼 활성표시 재동기화 + 디자인 프리셋 자동 선택
-Promise.all([loadDesignPresets(), loadTarget()]).then(() => {
+// 타겟/목적 복원 후 버튼 활성표시 재동기화. (디자인 시스템은 ②의 스타일 선택이 제어 —
+// 레거시 프리셋 자동덮어쓰기는 제거해 스타일별 영어 디자인 프롬프트가 유지되게 함.)
+loadTarget().then(() => {
   renderVoicePills("audiencePills", "gAudience");
   renderVoicePills("objectivePills", "gObjective");
-  applyDesignByAudience();
 });

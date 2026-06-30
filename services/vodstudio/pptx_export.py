@@ -63,9 +63,33 @@ def slides_payload_from_script(script_text: str, title: str = "",
     slides_in = parse_master_script(script_text or "")
     slides_out: List[Dict[str, Any]] = []
     for s in slides_in:
+        # 본문 = 화면 텍스트(슬라이드용). 없으면 상세 대본으로라도 채워 본문이 비지 않게.
         bullets = _bullets_from_screen_text(s.screen_text)
+        if not bullets:
+            bullets = _bullets_from_screen_text(s.narration)
         slides_out.append({"title": (s.title or "").strip() or f"슬라이드 {s.number}",
                            "bullets": bullets})
+    if not slides_out:
+        slides_out = [{"title": title or "내용", "bullets": []}]
+    return {"title": (title or "").strip() or "제목",
+            "subtitle": (subtitle or "").strip(),
+            "slides": slides_out}
+
+
+def slides_payload_from_images(image_paths: List[str], title: str = "",
+                               subtitle: str = "") -> Dict[str, Any]:
+    """NotebookLM 슬라이드 이미지들 → OCR → pptx_gen 페이로드.
+
+    이미지마다 OCR한 줄에서 **첫 줄=제목, 나머지=본문**으로 둔다(제목 구분이 틀리면
+    PPTX에서 수작업으로 옮기는 것을 전제). 그림 속 글자가 섞여도 무방(대강 추출).
+    OCR 엔진이 없으면 ocr.OcrUnavailable 이 올라온다(호출부에서 안내/폴백)."""
+    from services.vodstudio import ocr
+    slides_out: List[Dict[str, Any]] = []
+    for p in image_paths:
+        lines = ocr.ocr_lines(p)
+        t = lines[0] if lines else ""
+        bullets = lines[1:] if len(lines) > 1 else []
+        slides_out.append({"title": t, "bullets": bullets})
     if not slides_out:
         slides_out = [{"title": title or "내용", "bullets": []}]
     return {"title": (title or "").strip() or "제목",

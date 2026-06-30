@@ -137,13 +137,15 @@ async def render(
         _python(), "-m", "mp4maker", str(bdir),
         "--resolution", resolution,
     ]
-    if no_subtitles:
-        args.append("--no-subtitles")
+    # 정책: 자막은 굽지 않는다(클린본으로 통일). mp4maker --no-burn 으로 자막 하드번을
+    # 빼서 final.mp4 = 클린 영상, 별도 chNN.srt(사이드카)만 둔다(유튜브에 자막 따로 업로드).
+    # --no-soft-sub 로 softsub mp4(이중 렌더)도 생략 → 한 번만 렌더. (no_subtitles 인자는 호환용·무시)
+    args += ["--no-burn", "--no-soft-sub"]
     if dry_run:
         args.append("--dry-run")
     if extra_args:
         args += extra_args
-    final_token = "_final_nosub.mp4" if no_subtitles else "_final.mp4"
+    final_token = "_final.mp4"
     logger.info("mp4maker render: %s", " ".join(args[2:]))
     proc = await asyncio.create_subprocess_exec(
         *args, cwd=str(MP4MAKER_DIR),

@@ -32,10 +32,14 @@ if ! command -v codex >/dev/null 2>&1; then
 fi
 
 # 5) local TTS model (~380MB) + mp4maker + .env
-echo "[5/5] TTS model + mp4maker ..."
+echo "[5/6] TTS model + mp4maker ..."
 if [ ! -f assets/onnx/vocoder.onnx ]; then "$VPY" scripts/setup_assets.py; else echo "  [OK] TTS model present"; fi
 if [ ! -d mp4maker/mp4maker ]; then git clone --depth 1 https://github.com/leedonwoo2827-ship-it/mp4maker.git mp4maker || echo "  [note] mp4maker clone skipped"; fi
 [ -f .env ] || { [ -f .env.example ] && cp .env.example .env; }
+
+# 6) install PPTX fonts (Black Han Sans / Do Hyeon) for current user
+echo "[6/6] installing PPTX fonts (assets/fonts) ..."
+"$VPY" scripts/install_fonts.py || echo "  [note] font install skipped"
 
 echo
 echo "Note: ffmpeg/ffprobe must be on PATH for video render (macOS: 'brew install ffmpeg' · Debian/Ubuntu: 'sudo apt install ffmpeg')."

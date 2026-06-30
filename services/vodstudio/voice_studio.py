@@ -371,6 +371,71 @@ def _chap(bundle_dir: Path) -> str | None:
     return f"{int(m.group(1)):02d}" if m else None
 
 
+def insert_scene(bundle_dir: str | Path, after_scene: int, copy: bool = True) -> dict:
+    """after_scene 뒤에 씬 1개 삽입(NotebookLM이 합쳐 줄어든 씬 복원용).
+
+    - copy=True: 그 씬을 복제(텍스트·이미지·음성·자막 그대로 → 사용자가 이미지만 교체)
+    - copy=False: 빈 씬 삽입
+    대본 JSON 씬을 재번호하고, images/audio/subtitles 파일을 한 칸씩 뒤로 민다.
+    새 씬 번호 = after_scene + 1. (after_scene=0 이면 맨 앞)
+    """
+    import json
+    import shutil
+    import copy as _copy
+    root = Path(bundle_dir)
+    chap = _chap(root)
+    if not chap:
+        raise ValueError("chapter 번호를 알 수 없습니다.")
+    hits = sorted((root / "script").glob("*_script.json"))
+    if not hits:
+        raise FileNotFoundError("대본 JSON이 없습니다.")
+    sp = hits[0]
+    doc = json.loads(sp.read_text(encoding="utf-8"))
+    scenes = doc.get("scenes") or []
+    total = len(scenes)
+    after = max(0, min(int(after_scene), total))
+    subs = ("images", "audio", "subtitles")
+
+    # 1) 파일 시프트: n = total..after+1 → n+1 (역순, 충돌 방지)
+    for n in range(total, after, -1):
+        for sub in subs:
+            d = root / sub
+            if not d.is_dir():
+                continue
+            pre = f"ch{chap}_{n:02d}"
+            for f in list(d.glob(f"{pre}_*")):
+                suffix = f.name[len(pre):]
+                f.rename(d / f"ch{chap}_{n + 1:02d}{suffix}")
+
+    # 2) 새 씬 파일: copy면 after 씬 파일을 after+1 로 복제
+    if copy and after >= 1:
+        for sub in subs:
+            d = root / sub
+            if not d.is_dir():
+                continue
+            pre = f"ch{chap}_{after:02d}"
+            for f in list(d.glob(f"{pre}_*")):
+                suffix = f.name[len(pre):]
+                dest = d / f"ch{chap}_{after + 1:02d}{suffix}"
+                if not dest.exists():
+                    shutil.copyfile(f, dest)
+
+    # 3) 대본 JSON: 새 씬 삽입 + 전체 재번호
+    if copy and 1 <= after <= total:
+        new_sc = _copy.deepcopy(scenes[after - 1])
+    else:
+        new_sc = {"scene_type": "body", "title": "", "narration_text": "",
+                  "narration_seconds": 0, "voice_style": "narrator",
+                  "scene_meta": {"screen_text": "", "source_slide_number": after + 1}}
+    scenes.insert(after, new_sc)
+    for i, sc in enumerate(scenes, 1):
+        sc["scene"] = i
+        sc["image_filename"] = f"ch{chap}_{i:02d}_slide.png"
+    doc["scenes"] = scenes
+    sp.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"inserted_at": after + 1, "total": len(scenes)}
+
+
 def _newest_mtime(dirs: list[Path]) -> float:
     newest = 0.0
     for d in dirs:
@@ -437,6 +502,7 @@ def bundle_status(bundle_dir: str | Path) -> dict:
                 "scene": idx,
                 "title": sc.get("title") or "",
                 "narration_text": sc.get("narration_text") or "",
+                "screen_text": (sc.get("scene_meta") or {}).get("screen_text") or "",
                 "srt_text": sc.get("srt_text"),
                 "voice_style": vstyle,
                 "voice_code": vcode,
@@ -450,8 +516,9 @@ def bundle_status(bundle_dir: str | Path) -> dict:
                 "audio_duration": _audio_duration(aud),
             })
 
+    # 이 mp4maker: final.mp4 = 자막 없는 클린본(항상) · final_softsub.mp4 = 토글 자막 트랙(옵션)
     draft_mp4 = root / "draft" / f"ch{chap}_final.mp4" if chap else None
-    draft_nosub = root / "draft" / f"ch{chap}_final_nosub.mp4" if chap else None
+    draft_nosub = root / "draft" / f"ch{chap}_final_softsub.mp4" if chap else None
     render_stale = False
     if draft_mp4 and draft_mp4.exists():
         try:

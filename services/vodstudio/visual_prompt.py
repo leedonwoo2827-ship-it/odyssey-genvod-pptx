@@ -30,23 +30,26 @@ def _catalog() -> Dict[str, Any]:
     return json.loads(_STYLES_FILE.read_text(encoding="utf-8"))
 
 
+# 모든 스타일 공통 — 흰 배경 강제(기본 정책). 이미지 생성기가 미색/그라데이션으로
+# 흐리지 않게 마지막에 한 번 더 못박는다. 스타일별 문구 누락·드리프트를 방지.
+_FORCE_WHITE = (" Background MUST be pure flat white #FFFFFF on every slide "
+                "(no cream/beige/warm tint, no gradient, no patterned backdrop).")
+
+
 def deck_design_system(style: Dict[str, Any], intensity: Dict[str, Any]) -> str:
     """NotebookLM 렌더 코드용 '디자인 시스템' 스티어링(영문). 15스타일 카탈로그가
     슬라이드덱 전체 룩도 '규정'하도록 — 스타일 선택 하나로 덱·비주얼원고가 같은 톤."""
-    kws = ", ".join(style.get("keywords", []))
+    # 풍부한 구조 프롬프트(design_prompt)가 있으면 그대로 사용(스타일이 잘 먹힘).
+    rich = (style.get("design_prompt") or "").strip()
+    if rich:
+        return rich + _FORCE_WHITE
+    # 없으면 간결 1줄 폴백(스타일 + NotebookLM 매핑 + 핵심 키워드).
+    kws = ", ".join(style.get("keywords", [])[:3])
     return (
-        f"Style: {style.get('name','')} - {style.get('def','')}. "
-        "Pure white background (#FFFFFF).\n"
-        f"NotebookLM visual style: {style.get('nlm_style','Custom')}.\n"
-        f"Technique keywords: {kws}.\n"
-        "Typography: clean sans-serif (Title: Bold, Body: Regular).\n"
-        "Layout: spacious; max 5 bullet points per slide.\n"
-        "Tone: professional, scholarly, organized.\n"
-        "Consistency: maintain strict visual consistency across all parts/chunks.\n"
-        "Copyright: borrow technique/texture/lighting/composition only; do NOT "
-        "reproduce any specific work's characters, logos, or unique designs.\n"
-        f"Intensity: {intensity.get('directive','')}"
-    )
+        f"Style: {style.get('name','')}({kws}) · NotebookLM 비주얼 스타일: "
+        f"{style.get('nlm_style','Custom')} · 흰 배경, 깔끔한 산세리프(제목 굵게·본문 보통), "
+        "정보 전달 우선 · 기법·질감·구도만 차용(특정 작품 캐릭터·로고 재현 금지)."
+    ) + _FORCE_WHITE
 
 
 def list_styles() -> Dict[str, Any]:

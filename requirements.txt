@@ -42,6 +42,10 @@ pytest-asyncio
 # --- 영상공방 (VOD Studio) additions ---
 # 회사 양식 PPTX 생성 (services/studio/generators/pptx_gen.py). 문서공방에서 이식.
 python-pptx
+# ④ PPTX OCR: NotebookLM 슬라이드 이미지의 박힌 텍스트 추출 (services/vodstudio/ocr.py).
+# Windows 내장 OCR(Windows.Media.Ocr) 래퍼 — 추가 바이너리 설치 없이 한국어 OCR.
+# mac/linux 는 winsdk 가 없으므로 Tesseract(kor) 또는 'pip install easyocr' 사용.
+winsdk; sys_platform == "win32"
 # NotebookLM automation CLI (`nlm` + `notebooklm-mcp`). Drives slide-deck +
 # script generation. See services/notebooklm_service.py.
 # 주의: 이 패키지가 niquests→urllib3-future 를 끌어와 표준 urllib3 를 가린다.

@@ -15,11 +15,23 @@ NotebookLM 슬라이드 스타일이나 대본 기반 제작을 좋아하는 분
 
 | 단계 | 기능 |
 |---|---|
-| ① 대본 | **codex(OpenAI/ChatGPT) ↔ agy(Antigravity→Gemini/Google) 토글**, 소스 파일 여러 개 첨부, **📚 RAG(로컬 색인)** · **🔬 자료 딥리서치** · **✅ 대본 자동 검수**, 목소리 미리듣기 |
-| ② 이미지 | NotebookLM 슬라이드 PDF 임포트 → 씬별 그리드. **렌더 코드 생성**(디자인 프리셋·청크 자동 추천) |
-| ③ 음성/자막 | **로컬 CPU TTS(VoiceWright/Supertonic-3, ONNX)** — 씬별 음성/자막 생성·재생성, 자막 타이밍 편집, **📖 발음 사전** |
-| ④ 영상 | mp4maker 합성 — **자막 없는 클린본(유튜브용) + `.srt`** 또는 자막 구운본, dry-run, **📺 유튜브 메타 생성** |
+| ① 자료·대본 | **codex(ChatGPT) 로그인**, 소스 파일 첨부, **📚 RAG(로컬 색인)** · **🔬 딥리서치** · **✅ 대본 자동 검수**(🔴만 0이면 확정), 목소리 미리듣기 |
+| ② 비주얼원고 | 스타일 선택(15종, 흰 배경 강제) → **NotebookLM 렌더 코드 생성**(청크 자동 추천) → NotebookLM에서 슬라이드덱 PDF 생성 |
+| ③ 이미지 | NotebookLM 슬라이드덱 **PDF 임포트** → 씬별 그리드. **⑤영상·④PPTX의 공통 소스** |
+| ④ PPTX | **③ 이미지의 박힌 텍스트를 OCR로 추출** → 회사 양식 PPTX(제목 Black Han Sans/본문 Do Hyeon). **그림은 직접 삽입.** → REC 메이커 투입(영상 X) |
+| ⑤ 음성/자막 | **로컬 CPU TTS(VoiceWright/Supertonic-3, ONNX)** — 씬별 음성/자막 생성·재생성, 자막 타이밍 편집, **📖 발음 사전** |
+| ⑥ 영상 | mp4maker 합성 — **자막 없는 클린본(유튜브용) + `.srt`**(기본) 또는 자막 구운본, dry-run, **📺 유튜브 메타 생성** |
 | 공통 | **📂 번들 불러오기**(재시작 후 이어가기), **🧠 시리즈 메모리**(챕터 간 톤·용어 일관성) |
+
+> **두 갈래 산물** — ③ 이미지 이후: **갈래 1**) ④ PPTX 만들고 끝(REC 메이커용, 영상 X) · **갈래 2**) ⑤ 음성/자막 → ⑥ 영상(NotebookLM 이미지로 바로 영상, 클린본 + `.srt` → 유튜브에 자막 따로 업로드).
+
+### OCR (④ PPTX) — 로컬·CPU·LLM 무관
+NotebookLM 슬라이드는 글자가 이미지에 박혀 복사가 안 되므로 **OCR로 텍스트를 추출**한다(LLM 아님, 인터넷·API 무관, CPU에서 처리).
+- **Windows**: 내장 OCR(`winsdk` / Windows.Media.Ocr) — **추가 설치 0**(한국어 OCR 언어팩 필요, 한국어 Windows엔 보통 존재). `requirements.txt`에 `winsdk; sys_platform=="win32"` 로 자동 설치.
+- **mac/linux**: `winsdk` 미지원 → **Tesseract**(`brew install tesseract tesseract-lang` / `apt install tesseract-ocr tesseract-ocr-kor`) 또는 `pip install easyocr`. 둘 다 없으면 ① 대본 텍스트로 PPTX 생성 폴백.
+
+### PPTX 폰트 (제목 Black Han Sans · 본문 Do Hyeon)
+`assets/fonts/`에 동봉(OFL 라이선스). `setup` 단계에서 현재 사용자 계정에 자동 설치되며, 수동 설치는 `.ttf` 더블클릭. 미설치 시 대체 글꼴로 보인다.
 
 자세한 사용법·설계는 [`knowledge/`](knowledge/) 폴더 참고.
 
