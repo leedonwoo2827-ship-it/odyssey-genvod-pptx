@@ -58,9 +58,8 @@ if exist "assets\onnx\vocoder.onnx" (
 )
 echo step:models-done >> "%LOG%"
 
-REM 6) mp4maker checkout + probe, prepare .env
-echo [6/7] mp4maker checkout + probe...
-if not exist "mp4maker\mp4maker" git clone --depth 1 https://github.com/leedonwoo2827-ship-it/mp4maker.git mp4maker
+REM 6) mp4maker probe, prepare .env  (mp4maker is vendored in this repo - no clone)
+echo [6/7] mp4maker probe...
 if not exist .env copy .env.example .env >nul
 pushd mp4maker
 "%VPY%" -m mp4maker --probe

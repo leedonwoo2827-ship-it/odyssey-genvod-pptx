@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Project content (large media, not source)
+_assets/
+_backup/
+_이미지작업전백업/
+# Any folder starting with underscore is treated as user working content,
+# never as source code. Add more here if you create new ones.
+
+# Logs / temp
+*.log
+
+# Claude scratch (kept locally, not versioned)
+.claude/

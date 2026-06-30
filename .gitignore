@@ -15,8 +15,9 @@ venv/
 .env.bak.*
 !.env.example
 
-# mp4maker is a separate checkout cloned by setup.bat (not vendored here)
-mp4maker/
+# mp4maker is vendored (내장) — pure-python video compositor, committed in this repo.
+# (__pycache__/*.pyc are ignored by the global rules above.) Skip only its temp work dirs.
+mp4maker/**/_work/
 
 # Data — all user/runtime data (DB, uploads, mail, caches, memory) stays local.
 # Keep ONLY the style catalog the app ships with.
