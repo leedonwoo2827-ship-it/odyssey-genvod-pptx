@@ -681,6 +681,7 @@ async function makeImages() {
     if (d.images_dir) { $("imgPath").textContent = "📁 이미지 저장 위치: " + d.images_dir; $("imgPath").classList.remove("hidden"); }
     const wrap = $("thumbs");
     wrap.innerHTML = "";
+    wrap.style.cssText = "";   // 번들 불러오기에서 설정된 인라인(display:block) 잔재 제거 → .thumbs 그리드 복원
     (d.images || []).forEach(idx => {
       const el = document.createElement("div");
       el.className = "thumb";

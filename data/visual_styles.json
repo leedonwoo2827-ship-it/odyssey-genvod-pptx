@@ -1,6 +1,6 @@
 {
   "_about": "NotebookLM 비주얼원고(흰 배경) + 렌더코드 디자인 시스템용 스타일 카탈로그. 출처: 260626-prompt-builder/스타일_카탈로그.md (이미지 스튜디오 풍). NotebookLM 적합성 조사·확정은 _context/notebooklm-styles.md 참고. 저작권: 기법·질감·조명·구도만 차용, 특정 작품 캐릭터·로고·고유 디자인 재현 금지.",
-  "_policy": "notebooklm=true 인 13종만 UI에 노출(상한 13). 배열 순서 = 표시 순서(경제학 교재 적합 우선). nlm_style = NotebookLM 네이티브 스타일 매핑(또는 Custom).",
+  "_policy": "notebooklm=true 스타일만 UI에 노출. 15종 전체를 하나씩 테스트하는 중 — 확정 제외 스타일과 사유는 docs/style-test-log.md 참고. 배열 순서 = 표시 순서. nlm_style = NotebookLM 네이티브 스타일 매핑(또는 Custom).",
   "intensities": [
     {
       "id": "subtle",
@@ -61,7 +61,7 @@
         "넓은 여백"
       ],
       "recommended": false,
-      "notebooklm": false,
+      "notebooklm": true,
       "nlm_style": "Whiteboard / Custom"
     },
     {
@@ -90,7 +90,7 @@
         "기하학적 단순화"
       ],
       "recommended": true,
-      "notebooklm": true,
+      "notebooklm": false,
       "nlm_style": "Retro Print (native)",
       "design_prompt": "Style: Vintage editorial / mid-century print poster (1950s-1970s), limited color palette, geometric simplification, on plain off-white/white background.\nTypography: bold geometric sans-serif.\nLayout: spacious; max 5 bullet points per slide.\nTone: editorial, confident, retro.\nCrucial: readable text separated from graphics (no overlap); consistent retro palette across parts; plain background ONLY — NO decorative scatter around the subject (no floating dots, squiggles, stray lines, halftone fields, or background patterns); draw ONLY the essential illustration/diagram so each element can be cleanly cropped out (callout/speech bubbles are allowed).\nUse \"noun-ending\" or short-form for all slide texts (concise, not full sentences)."
     },
@@ -104,7 +104,7 @@
         "입체 그림자"
       ],
       "recommended": true,
-      "notebooklm": false,
+      "notebooklm": true,
       "nlm_style": "Paper-craft (native)"
     },
     {
@@ -117,7 +117,7 @@
         "디오라마"
       ],
       "recommended": false,
-      "notebooklm": true,
+      "notebooklm": false,
       "nlm_style": "Custom (isometric infographic)",
       "design_prompt": "Style: Isometric 3D vector illustration, data-visualization focus (isometric charts, connected nodes, flow lines), on plain white background; mini figures, floating platforms, icons.\nTypography: rounded sans-serif.\nLayout: structured flow; max 5 bullet points per slide.\nTone: clear, systematic, modern.\nCrucial: text in its own area, no overlap with the isometric scene; consistent palette across parts; plain pure-white background ONLY — NO decorative scatter around the subject (no floating dots, squiggles, stray lines, Memphis shapes, halftone, or diagonal-hatch/background patterns); draw ONLY the essential isometric illustration/diagram so each element can be cleanly cropped out (callout/speech bubbles are allowed).\nUse \"noun-ending\" or short-form for all slide texts (concise, not full sentences)."
     },
@@ -132,7 +132,7 @@
         "하이라이트"
       ],
       "recommended": false,
-      "notebooklm": false,
+      "notebooklm": true,
       "nlm_style": "Whiteboard (native)"
     },
     {
@@ -146,7 +146,7 @@
         "넓은 여백"
       ],
       "recommended": false,
-      "notebooklm": false,
+      "notebooklm": true,
       "nlm_style": "Classic"
     },
     {
@@ -160,7 +160,7 @@
         "인쇄 어긋남"
       ],
       "recommended": false,
-      "notebooklm": false,
+      "notebooklm": true,
       "nlm_style": "Retro Print (close)"
     },
     {
@@ -174,7 +174,7 @@
         "한정 색"
       ],
       "recommended": false,
-      "notebooklm": false,
+      "notebooklm": true,
       "nlm_style": "Heritage (native)"
     },
     {
@@ -188,7 +188,7 @@
         "부드러운 라이팅"
       ],
       "recommended": false,
-      "notebooklm": false,
+      "notebooklm": true,
       "nlm_style": "Custom (clay)"
     },
     {
@@ -203,7 +203,7 @@
         "둥근 캐릭터"
       ],
       "recommended": false,
-      "notebooklm": true,
+      "notebooklm": false,
       "nlm_style": "Custom (3D CGI)",
       "design_prompt": "Style: Stylized 3D animation look - rounded characters and objects, soft global illumination, subsurface feel, shallow depth of field (Pixar-like; DO NOT reproduce any specific work's characters or designs). Pure flat white background #FFFFFF (no tint or gradient) — keep lighting on the subject ONLY; the background stays neutral pure white.\nTypography: rounded modern sans-serif.\nLayout: clear central subject; max 5 bullet points per slide.\nTone: warm, friendly, modern.\nCrucial: readable text separated from the 3D visual (no overlap); consistent look across parts; plain background ONLY — NO decorative scatter around the subject (no floating dots, squiggles, stray lines, Memphis shapes, halftone, or background patterns); render ONLY the essential 3D subject/diagram so each element can be cleanly cropped out (callout/speech bubbles are allowed).\nUse \"noun-ending\" or short-form for all slide texts (concise, not full sentences)."
     },
@@ -233,7 +233,7 @@
         "보케"
       ],
       "recommended": false,
-      "notebooklm": false,
+      "notebooklm": true,
       "nlm_style": "none (제외)"
     }
   ]
